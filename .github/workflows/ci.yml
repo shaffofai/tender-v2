@@ -1,9 +1,9 @@
 # Tender-v2 — test, build, verify, publish.
 #
 # Self-contained: the automatic GITHUB_TOKEN is enough to publish to the
-# organisation's registry. CI does not deploy (the platform's push-to-deploy
-# path is still being decided); it publishes .../shaffofai-tender-v2:sha-<commit>,
-# a tag that never moves — which is what makes a rollback possible.
+# organisation's registry. CI does not deploy — deploys are by hand (DEPLOY.md
+# §5). It publishes .../shaffofai-tender-v2:sha-<commit>, a tag that never
+# moves — which is what makes a rollback possible.
 name: CI
 
 on:
@@ -139,17 +139,17 @@ jobs:
             ${{ steps.img.outputs.name }}:latest
           cache-from: type=gha
 
-      - name: What happens on the server
+      - name: What to run on the server
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           {
             echo "### Published \`sha-${{ github.sha }}\`"
-            echo "Deploy by hand on the server (DEPLOY.md):"
+            echo "Deploys are by hand (DEPLOY.md §5). On the server:"
             echo '```bash'
             echo "cd ~/shaffofai-tender-v2 && git pull --ff-only"
             echo "sudo sed -i 's/^TAG=.*/TAG=sha-${{ github.sha }}/' .env"
-            echo "sudo docker compose -f docker-compose.yml -f docker-compose.edge.yml pull"
-            echo "sudo docker compose -f docker-compose.yml -f docker-compose.edge.yml up -d"
+            echo "sudo docker compose pull && sudo docker compose up -d --no-build"
             echo '```'
+            echo "Roll back: the same \`sed\`, \`pull\` and \`up\` with an earlier green \`sha-<commit>\`."
             echo "Never \`down -v\` — it deletes the database volume."
           } >> "$GITHUB_STEP_SUMMARY"
