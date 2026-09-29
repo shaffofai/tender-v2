@@ -92,8 +92,11 @@ jobs:
           docker network create tender-ci
           docker run -d --name db --network tender-ci \
             -e POSTGRES_USER=tender_owner -e POSTGRES_PASSWORD=ownerci -e POSTGRES_DB=tender_v2 postgres:17
+          # Over TCP, not the socket: on first start the image runs a temporary
+          # socket-only server for its init step and restarts, so a socket probe
+          # can say "ready" while `db:5432` still refuses connections.
           for _ in $(seq 1 30); do
-            docker exec db pg_isready -U tender_owner -d tender_v2 >/dev/null 2>&1 && break; sleep 2
+            docker exec db pg_isready -h 127.0.0.1 -U tender_owner -d tender_v2 >/dev/null 2>&1 && break; sleep 2
           done
           docker run --rm --network tender-ci \
             -e DATABASE_URL=postgresql://tender_owner:ownerci@db:5432/tender_v2 \

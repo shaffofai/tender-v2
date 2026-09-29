@@ -3,7 +3,7 @@
  "qadamlar": [
   [
    "schema",
-   "441e672d9912b9d8f548cc0a9549e4d9b97751ecf6dc0669c8c9047cdabf9ccb"
+   "d57e05347b8afb476a6f74bf2cfa8be1ceda22f622c3e284bacb21a9a7c068c3"
   ],
   [
    "worker --health (empty db)",

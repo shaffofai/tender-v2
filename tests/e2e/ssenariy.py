@@ -326,24 +326,58 @@ def snapshot(name):
     return step(name, kind="db", tables=data, hits=hits)
 
 
+def sxema_tavsifi(c):
+    """Sxemaning PostgreSQL VERSIYASIGA bog'liq bo'lmagan tavsifi — katalogdan.
+
+    pg_dump EMAS: uning chiqishi mijoz (pg_dump) versiyasiga bog'liq, eski
+    pg_dump yangi serverni umuman dump qilmaydi (CI: pg_dump 16 ↔ server 17).
+    PG18 dagi NOT NULL cheklov yozuvlari (contype 'n') olinmaydi — ular
+    `attnotnull` da allaqachon bor.
+    """
+    q = lambda sql: [list(r) for r in c.execute(sql).fetchall()]   # noqa: E731
+    return {
+        "ustunlar": q("""
+            SELECT c.relname, a.attname, format_type(a.atttypid, a.atttypmod),
+                   a.attnotnull, pg_get_expr(d.adbin, d.adrelid)
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+            LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+            WHERE c.relkind = 'r' AND c.relname <> 'schema_migrations'
+            ORDER BY c.relname, a.attnum"""),
+        "cheklovlar": q("""
+            SELECT r.relname, k.conname, k.contype::text, pg_get_constraintdef(k.oid)
+            FROM pg_constraint k
+            JOIN pg_class r ON r.oid = k.conrelid
+            JOIN pg_namespace n ON n.oid = r.relnamespace AND n.nspname = 'public'
+            WHERE k.contype IN ('p', 'u', 'c', 'f', 'x') AND r.relname <> 'schema_migrations'
+            ORDER BY 1, 2"""),
+        "indekslar": q("""
+            SELECT tablename, indexname, indexdef FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename <> 'schema_migrations'
+            ORDER BY 1, 2"""),
+        "triggerlar": q("""
+            SELECT r.relname, t.tgname, pg_get_triggerdef(t.oid)
+            FROM pg_trigger t
+            JOIN pg_class r ON r.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = r.relnamespace AND n.nspname = 'public'
+            WHERE NOT t.tgisinternal ORDER BY 1, 2"""),
+        "funksiyalar": q("""
+            SELECT p.proname, pg_get_function_identity_arguments(p.oid),
+                   format_type(p.prorettype, NULL), l.lanname, md5(p.prosrc)
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+            JOIN pg_language l ON l.oid = p.prolang
+            ORDER BY 1, 2"""),
+        "ketma_ketliklar": q("""
+            SELECT sequencename, data_type::text, start_value, increment_by
+            FROM pg_sequences WHERE schemaname = 'public' ORDER BY 1"""),
+    }
+
+
 def schema_snapshot(name):
-    p = subprocess.run(["pg_dump", "--schema-only", "--no-owner", "--no-privileges",
-                        "--no-comments", "-d", ADMIN_URL], capture_output=True, text=True)
-    blocks, cur = [], []
-    for line in p.stdout.splitlines():
-        if line.startswith("--") or line.startswith("SET ") or line.startswith("\\") \
-                or line.startswith("SELECT pg_catalog.set_config"):
-            continue
-        if not line.strip():
-            if cur:
-                blocks.append("\n".join(cur))
-                cur = []
-            continue
-        cur.append(line)
-    if cur:
-        blocks.append("\n".join(cur))
-    blocks = sorted(b for b in blocks if "schema_migrations" not in b)
     with psycopg.connect(ADMIN_URL, autocommit=True) as c:
+        tavsif = sxema_tavsifi(c)
         grants = c.execute(
             "SELECT table_name, privilege_type FROM information_schema.role_table_grants "
             "WHERE grantee = %s AND table_name <> 'schema_migrations' ORDER BY 1, 2",
@@ -361,14 +395,17 @@ def schema_snapshot(name):
         role = c.execute(
             "SELECT rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin "
             "FROM pg_roles WHERE rolname = %s", (APP_ROLE,)).fetchall()
+        # Egasi — ROL sifatida (ismi emas): migratsiya roli egasi, ilova roli EMAS.
+        # Ism yozilsa, boshqa superuser bilan yurgizganda yolg'on farq chiqardi.
         owners = c.execute(
-            "SELECT c.relname, pg_get_userbyid(c.relowner) FROM pg_class c "
+            "SELECT c.relname, pg_get_userbyid(c.relowner) = current_user, "
+            "       pg_get_userbyid(c.relowner) = %s FROM pg_class c "
             "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' "
             "AND c.relkind IN ('r','S') AND c.relname NOT LIKE 'schema_migrations%%' "
-            "ORDER BY 1").fetchall()
+            "ORDER BY 1", (APP_ROLE,)).fetchall()
         dbconnect = c.execute("SELECT has_database_privilege(%s, %s, 'CONNECT')",
                               (APP_ROLE, DB)).fetchone()
-    return step(name, kind="schema", dump=blocks,
+    return step(name, kind="schema", dump=tavsif,
                 grants=[list(g) for g in grants], colgrants=[list(g) for g in colgrants],
                 seqs=[list(s) for s in seqs], role=[list(r) for r in role],
                 owners=[list(o) for o in owners], dbconnect=list(dbconnect))
