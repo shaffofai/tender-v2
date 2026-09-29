@@ -1,0 +1,9 @@
+# Ishlab chiqarish bog'liqliklari — YAGONA manifest (Dockerfile ham shuni o'rnatadi).
+openpyxl==3.1.5
+xlrd==2.0.2
+psycopg[binary]==3.3.4
+httpx==0.28.1
+python-dotenv==1.2.2
+# Kiruvchi API (2026-09-23, tender tizimi bilan integratsiya)
+fastapi==0.135.1
+uvicorn[standard]==0.42.0

@@ -1,0 +1,501 @@
+{
+ "izoh": "tests/e2e/ssenariy.py — har qadam xulqining sha256 izi",
+ "qadamlar": [
+  [
+   "schema",
+   "441e672d9912b9d8f548cc0a9549e4d9b97751ecf6dc0669c8c9047cdabf9ccb"
+  ],
+  [
+   "worker --health (empty db)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --health --toliq (empty db)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --health (empty db)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main -y (empty db)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --once (empty db)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --health (db down)",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "main (no settings)",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "sender (http url)",
+   "25903e7ee6d3a8153bae40f943a0e46289d5485fa8a746d05eb3c8de72bb8e0e"
+  ],
+  [
+   "sender --health (http url)",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "sender (4:2 map)",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "sender (no credentials)",
+   "25903e7ee6d3a8153bae40f943a0e46289d5485fa8a746d05eb3c8de72bb8e0e"
+  ],
+  [
+   "worker (bad table name)",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "unconfigured: post",
+   "3e7ec1ae604ec422e7427fd161be2cb0b2e36588b6b95d438e0abdeab9a7744f"
+  ],
+  [
+   "unconfigured: health",
+   "8eb84d0c234a4cebc393a6e711355134819315685f523f95b1540a2a07899f5c"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "db down: post",
+   "87da4e80ffcf5262442449a0591a33daa413e07c91883fa9162eb920756fd635"
+  ],
+  [
+   "db down: health",
+   "5ff637942ce71f0b1582c4a0a826c50bc0684279c94c9f77134b4f7767a1d3e8"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "health (fresh)",
+   "06a38037657d3d8a96644de367b9a47c114dbcd5e49f0751677ec9f679102d9c"
+  ],
+  [
+   "auth: none",
+   "deb67026365bd7cf775d20dec0043c796b3727ff93b00c55eac05dc4bea859ca"
+  ],
+  [
+   "auth: wrong password",
+   "31b5a225f7c288e28144bfab82251ac2f3a4810ebb69c64d4334d602d45c0ca1"
+  ],
+  [
+   "auth: wrong user",
+   "31b5a225f7c288e28144bfab82251ac2f3a4810ebb69c64d4334d602d45c0ca1"
+  ],
+  [
+   "auth: bearer",
+   "deb67026365bd7cf775d20dec0043c796b3727ff93b00c55eac05dc4bea859ca"
+  ],
+  [
+   "auth: broken base64",
+   "dc48dbe8e1ca5aefc4a8419a97a3abb5fe157823da6869125ca08b7d4180ed5d"
+  ],
+  [
+   "auth: lowercase scheme",
+   "816866c1769ab24a6fbc15e6bc53b70ef56eb432a83e5458d7b3cb78046e086f"
+  ],
+  [
+   "body: not json",
+   "53f3cb4170c7ae53e3944aa1137ce1b86e0e42136b36732bd412b611ca141634"
+  ],
+  [
+   "body: string",
+   "7e40f74b07cf6aba6e0acfb16a830e3dda64679bb6f7c563ff1037eee96ca041"
+  ],
+  [
+   "body: number",
+   "7e40f74b07cf6aba6e0acfb16a830e3dda64679bb6f7c563ff1037eee96ca041"
+  ],
+  [
+   "body: empty list",
+   "816866c1769ab24a6fbc15e6bc53b70ef56eb432a83e5458d7b3cb78046e086f"
+  ],
+  [
+   "body: empty object",
+   "b01ef4d5dbf10f7080f3aa32c72110eba635545de9f184a3969beee376a9daea"
+  ],
+  [
+   "body: too many",
+   "8c1fd077be33478d097b6607b2e6024194af46c9e6698c148c7ff187fcf6b76d"
+  ],
+  [
+   "body: fayllar empty",
+   "816866c1769ab24a6fbc15e6bc53b70ef56eb432a83e5458d7b3cb78046e086f"
+  ],
+  [
+   "templates batch",
+   "33018d8e397a795a7892f4c109188be56c63880f90b1e5cfd4b076fd6bf26329"
+  ],
+  [
+   "templates again (duplicate)",
+   "3014acada1d87514e6fc1a10af5bf0464b85fd5c21012a7a8a6ca6cfb48dc36a"
+  ],
+  [
+   "participants batch 1",
+   "b0fa943e1e140387d7a71077dbb524b2d789ec6d3fb9bd9e14f4aa91f1b26270"
+  ],
+  [
+   "participants batch 2 (grouped)",
+   "83b0f93672148b5e2ea22b1fc52986bccff8e9a565da92c4b0bb8ac53688e9d2"
+  ],
+  [
+   "validation errors",
+   "b00d53fd7d082603742ad4303a6e2c98fe6f7ece892b1ea301be917668590e6d"
+  ],
+  [
+   "shape: single object",
+   "3a571f5bff0c14fbc6e2fd9057488f380f696b8c9992a9a6254ea9c4410f9622"
+  ],
+  [
+   "shape: fayllar",
+   "1dba44fa50571c614d51e6d2555f87f5881ec90b3912ded504e0e8f27e3f60b6"
+  ],
+  [
+   "shape: data",
+   "8328cfd562a16b71a37bb903d209fbb9aebcc8f6c88d65e1035945d9aa07e3d1"
+  ],
+  [
+   "shape: items with group",
+   "153537d744b5d7c8279d53076b1d5b52f6c6f8e7174d1b367e3fe4c34cbeb624"
+  ],
+  [
+   "shape: single group object",
+   "5f6ff81b2c8f45c3a3e1d6c3cb324aa9ff2f58954f26a89104fc5cef9b17b7ba"
+  ],
+  [
+   "health (after traffic)",
+   "acd8865e66fda115af33b578e347d7f55234448edb70a9684dd01a8e938254a1"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "db after intake",
+   "71f19dc1d697c62a102cf0de252bec8cfaa9b806490e4b8bc4b4ead4580459f5"
+  ],
+  [
+   "main --quruq -n 4 (dry run)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after dry run",
+   "2f85b117b5a60e3f42acf75ebc67c17532d3cdc7b35291f6cbb9db5610d88134"
+  ],
+  [
+   "worker --once",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main --bitta",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main -n 2",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main -y (drain)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after worker pass 1",
+   "92094ac8044486a2c800321dfb645ef6e71dba4f6a52cf42da9b30a9e261d874"
+  ],
+  [
+   "worker --health --toliq (backlog)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main -y (discovery)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after discovery",
+   "cea3f1e3cdfd42b5dd40b51184340e9161f0dde7dbf9e711d3aad8dbafe66a7a"
+  ],
+  [
+   "late template for 1007",
+   "3a9e046b7c570bfbaa2b1b2cf1c644c6e675f9d7eae8885827cbdfe60cddd861"
+  ],
+  [
+   "participant link changed",
+   "c10005d067cb8f2a92df411988c792932218f8dc66023a5a48497b34badf63de"
+  ],
+  [
+   "template link changed (anomaly)",
+   "8895a3a27c115773dbaf8dbe7e8ec427d072fcf8b45c2b91988fcb31035dc66e"
+  ],
+  [
+   "health (wave 2)",
+   "1c3e0437b82c90a451219f95c981084435e34710737b97552d5d9ddd0c16bace"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "db after wave 2",
+   "b699ee5ee7288046f65b2b428818cc3e38f419b2a4acd9595c4059f1f82a013b"
+  ],
+  [
+   "worker --once (wave 2)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main -y (wave 2)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after worker pass 2",
+   "9d39f4eb7f1c9cb630d54c52a3b984c8f919e811acea1ade9c2623160a7dc724"
+  ],
+  [
+   "sender --holat (before)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --health (before)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender cycle 1 (strict)",
+   "6528fcb83237f4baa01f039e6815f27e781c9cf1c58c181a05d090b6b98d2c9d"
+  ],
+  [
+   "sender cycle 2 (strict)",
+   "fd3bbe998ea5f0c9e2b597364c7c1324c283bcf2b785225527bfffd4af2dc47d"
+  ],
+  [
+   "sender cycle 3 (strict)",
+   "a4fb922888737b0e7c5791c2670daac1996e253118fd834457d542377b4d5da8"
+  ],
+  [
+   "sender cycle 4 (strict)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after strict delivery",
+   "3413c4a65d57998c6b75cbb7fd114344cfd327032deb6bfa1ebc5cc3bee8d14c"
+  ],
+  [
+   "sender --health (strict)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --qayta-och 3",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender cycle 5",
+   "795bdb234da5393854415f00c4ddf8557a3e0440b790c7c0e97fdd6b5228d9ac"
+  ],
+  [
+   "sender --qayta-och (all)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender cycle 6",
+   "a661c58ec4474da82e62a5c0a4dd23bccc702488d0960eecdda6a74547cf3a60"
+  ],
+  [
+   "sender cycle 7",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --holat (after)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --health (after)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after delivery",
+   "6c4fa3ea404b9f3645f0e7aeee2124198b7bdc2287b78053abd1e0a8b59b2cf0"
+  ],
+  [
+   "worker --dead-letters",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --health",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --health --toliq",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --health (as superuser)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --shablonlar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --etalonlar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --help",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "main --help",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --help",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish ",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --sxema",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --fayllar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --fayllar 5",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --shablonlar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --tenderlar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --natijalar",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --kamchilik",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --tender 1001",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "korish --sql",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "kuzatuv ",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "kuzatuv --hammasi",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "kuzatuv --fayl 1",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "kuzatuv --file-id 21",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "kuzatuv --muammo",
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
+  ],
+  [
+   "ishga_tushir --holat",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "ishga_tushir --quruq 3",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after operator tools",
+   "6c4fa3ea404b9f3645f0e7aeee2124198b7bdc2287b78053abd1e0a8b59b2cf0"
+  ],
+  [
+   "worker --shablonlarni-tayyorla",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --requeue 9",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --requeue unknown",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after single requeue",
+   "131241774fcb52bd98d0ee1c66fd8390bb48a755753425b022065f03d85c1a9d"
+  ],
+  [
+   "main -y (after requeue)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --requeue all",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after requeue all",
+   "8d6b34a32564721f57c9de7ea6efa36a832a3adc005a360ab3c8708fbc08dcbf"
+  ],
+  [
+   "main -y (after requeue all)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker --kesh-tozala",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender cycle 8",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db final",
+   "a029426dce0dd455af91056227a2555aa7f7d6380af4df94ee7ea543ef4c6f00"
+  ],
+  [
+   "main --davomiy (SIGTERM)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "worker loop (SIGTERM)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "sender --davomiy (SIGTERM)",
+   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+  ],
+  [
+   "db after SIGTERM runs",
+   "a029426dce0dd455af91056227a2555aa7f7d6380af4df94ee7ea543ef4c6f00"
+  ],
+  [
+   "tender platform received",
+   "007f965476a36b7758257859b61df8dad31885ad3c79cba253628b663a3db4c2"
+  ]
+ ]
+}

@@ -1,0 +1,51 @@
+# ============================================================================
+# .dockerignore — rasmga TUSHMAYDIGAN narsalar (Dockerfile faqat app/,
+# tender_engine/ va kirish skriptlarini ko'chiradi, bu esa ikkinchi qavat).
+# ============================================================================
+
+# Sirlar — HECH QACHON rasmga tushmasin
+.env
+.env.*
+!.env.example
+*.env
+secrets
+
+# Versiya nazorati, CI va testlar — rasm xizmatni ishga tushiradi, sinamaydi
+.git
+.gitignore
+.gitattributes
+.github
+tests/
+
+# Virtual muhitlar, keshlar
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Ish vaqtidagi ma'lumotlar (konteynerda volume orqali beriladi)
+_downloads/
+_etalon_cache/
+_quruq_yuklash/
+*.log
+logs/
+data/
+data_new/
+korpus/
+kuzatuv_*.xlsx
+
+# Muharrir va OS fayllari
+.idea/
+.vscode/
+.claude/
+*.swp
+~$*
+Thumbs.db
+.DS_Store
+
+# Hujjatlar repozitoriyda qoladi
+*.md
+*.zip

@@ -1,0 +1,152 @@
+# Tender-v2 — test, build, verify, publish.
+#
+# Self-contained: the automatic GITHUB_TOKEN is enough to publish to the
+# organisation's registry. CI does not deploy (the platform's push-to-deploy
+# path is still being decided); it publishes .../shaffofai-tender-v2:sha-<commit>,
+# a tag that never moves — which is what makes a rollback possible.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Suites
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The regression corpus (real tender documents) is not in this
+      # repository; its gate fails on purpose unless this says so explicitly.
+      KORPUS_SHART_EMAS: "1"
+      # tests/e2e runs the whole system (API → worker → sender) against this
+      # server in its own throwaway database.
+      E2E_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"   # what the image runs
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Every module compiles
+        run: python -m compileall -q app tender_engine *.py
+      - name: Suites (unit + end-to-end)
+        run: python -m pytest -q -p no:cacheprovider -rs tests
+
+  image:
+    name: Build, verify, publish
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - id: img
+        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/shaffofai-tender-v2' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ steps.img.outputs.name }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: No credential reached the image
+        run: |
+          set -eu
+          found=$(docker run --rm --entrypoint sh "${{ steps.img.outputs.name }}:sha-${{ github.sha }}" -c \
+            'find /app -xdev \( -name ".env" -o -name "*.env" -o -name "*service-account*.json" \) 2>/dev/null' || true)
+          [ -z "$found" ] || { echo "::error::credential-shaped file in the image"; echo "$found"; exit 1; }
+
+      - name: The image boots against a real database
+        run: |
+          # Start it the way compose does: PostgreSQL 17 on a private network,
+          # migrations as the owner, the services as the least-privilege role.
+          set -eu
+          IMG="${{ steps.img.outputs.name }}:sha-${{ github.sha }}"
+          docker network create tender-ci
+          docker run -d --name db --network tender-ci \
+            -e POSTGRES_USER=tender_owner -e POSTGRES_PASSWORD=ownerci -e POSTGRES_DB=tender_v2 postgres:17
+          for _ in $(seq 1 30); do
+            docker exec db pg_isready -U tender_owner -d tender_v2 >/dev/null 2>&1 && break; sleep 2
+          done
+          docker run --rm --network tender-ci \
+            -e DATABASE_URL=postgresql://tender_owner:ownerci@db:5432/tender_v2 \
+            -e APP_DB_USER=tender_ai -e APP_DB_PASSWORD=appci \
+            --entrypoint python "$IMG" -m app.db.migrate
+          APP=postgresql://tender_ai:appci@db:5432/tender_v2
+          docker run -d --name worker --network tender-ci -e DATABASE_URL=$APP "$IMG"
+          docker run -d --name api --network tender-ci -e DATABASE_URL=$APP \
+            -e KIRUVCHI_LOGIN=ci -e KIRUVCHI_PAROL=ci-throwaway \
+            --entrypoint python "$IMG" -m uvicorn api_server:app --host 0.0.0.0 --port 8000
+          for _ in $(seq 1 45); do
+            state=$(docker inspect --format '{{.State.Health.Status}}' worker)
+            [ "$state" = "healthy" ] && break
+            [ "$(docker inspect --format '{{.State.Running}}' worker)" = "true" ] || break
+            sleep 4
+          done
+          if [ "$(docker inspect --format '{{.State.Health.Status}}' worker)" != "healthy" ]; then
+            echo "::error::the worker never became healthy"; docker logs worker 2>&1 | tail -60; exit 1
+          fi
+          docker exec api python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200 else 1)" \
+            || { echo "::error::api /health failed"; docker logs api 2>&1 | tail -60; exit 1; }
+          echo "worker healthy, api /health 200"
+
+      - name: Log in to the registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:sha-${{ github.sha }}
+            ${{ steps.img.outputs.name }}:latest
+          cache-from: type=gha
+
+      - name: What happens on the server
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          {
+            echo "### Published \`sha-${{ github.sha }}\`"
+            echo "Deploy by hand on the server (DEPLOY.md):"
+            echo '```bash'
+            echo "cd ~/shaffofai-tender-v2 && git pull --ff-only"
+            echo "sudo sed -i 's/^TAG=.*/TAG=sha-${{ github.sha }}/' .env"
+            echo "sudo docker compose -f docker-compose.yml -f docker-compose.edge.yml pull"
+            echo "sudo docker compose -f docker-compose.yml -f docker-compose.edge.yml up -d"
+            echo '```'
+            echo "Never \`down -v\` — it deletes the database volume."
+          } >> "$GITHUB_STEP_SUMMARY"

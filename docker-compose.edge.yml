@@ -1,0 +1,17 @@
+# ============================================================================
+# O'TISH DAVRI UCHUN: API ni host portida ochish.
+#
+# Hozir kompaniya edge'i va platforma router'i tender-v2 ni
+# 192.168.100.60:8084 da kutadi (gateway router/nginx.conf). Router
+# `http://tender-v2:8000` ga o'tkazilgach (API allaqachon shaffofai-v2
+# tarmog'ida shu nom bilan) bu fayl KERAK EMAS — o'chiring.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.edge.yml up -d
+#
+# .env: EDGE_BIND=192.168.100.60  (standart 127.0.0.1 — faqat shu mashina)
+# 0.0.0.0 QO'YMANG: API hamma interfeysda ochilib qoladi.
+# ============================================================================
+services:
+  api:
+    ports:
+      - "${EDGE_BIND:-127.0.0.1}:${EDGE_PORT:-8084}:8000"

@@ -1,0 +1,191 @@
+# ============================================================================
+# Tender-v2 — o'z PostgreSQL bazasi bilan (platformaning umumiy bazasidan ALOHIDA)
+#
+#     cp .env.example .env && nano .env && chmod 600 .env
+#     docker compose pull && docker compose up -d      # CI chiqargan rasm
+#     docker compose up -d --build                     # yoki shu yerda qurish
+#
+#   db       PostgreSQL 17 — faqat ichki tarmoqda, porti tashqariga OCHILMAYDI
+#   migrate  bir martalik: sxema migratsiyalari + ilova roli va huquqlari
+#   api      kiruvchi API (tender tizimi → biz); platforma tarmog'ida «tender-v2»
+#   worker   tekshiruv (python main.py --davomiy -y)
+#   sender   chiquvchi yuboruvchi (biz → tender tizimi)
+#
+# Ilova (api/worker/sender) bazaga MINIMAL huquqli APP_DB_USER (tender_ai)
+# bilan ulanadi; jadvallar egasi POSTGRES_USER — u faqat `migrate` da. Shu
+# sababli ilova audit jadvalining append-only triggerini o'chira olmaydi.
+#
+# Nomlar `shaffofai-v2-tender-v2-*`: serverdagi eski `tender_deploy`
+# konteynerlari (tender-postgres, tender-ai, tender-api, tender-yuboruvchi)
+# bilan to'qnashmaydi — o'tish paytida ikkalasi yonma-yon tura oladi.
+#
+# Portlar: bu faylda HECH QAYSI port tashqariga ochilmaydi. O'tish davrida
+# (router/edge hali 192.168.100.60:8084 ni kutsa) — docker-compose.edge.yml.
+#
+# ⚠️ HECH QACHON `docker compose down -v` — bazaning volume'i o'chadi.
+# ============================================================================
+name: shaffofai-v2-tender-v2
+
+x-app: &app
+  image: "${IMAGE:-ghcr.io/shaffofai/shaffofai-tender-v2}:${TAG:-latest}"
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
+
+# Ilova konteynerlarining baza manzili — minimal huquqli rol bilan.
+x-app-db: &app-db "postgresql://${APP_DB_USER:-tender_ai}:${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}@db:5432/${POSTGRES_DB:-tender_v2}"
+
+services:
+
+  db:
+    image: postgres:17
+    container_name: shaffofai-v2-tender-v2-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tender_v2}
+      POSTGRES_USER: ${POSTGRES_USER:-tender_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: Asia/Tashkent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Sxemani yaratadi/yangilaydi (app/db/migrations) va ilova rolini
+  # (APP_DB_USER, parol — APP_DB_PASSWORD) yaratib, minimal huquqlarni beradi.
+  # Idempotent: har `up` da ishlaydi, qo'llanganlarini o'tkazib yuboradi.
+  migrate:
+    <<: *app
+    container_name: shaffofai-v2-tender-v2-migrate
+    restart: "no"
+    entrypoint: ["python", "-m", "app.db.migrate"]
+    command: []
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-tender_owner}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-tender_v2}"
+      APP_DB_USER: ${APP_DB_USER:-tender_ai}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+    healthcheck:
+      disable: true
+
+  # Kiruvchi API. `--workers 1` ATAYLAB: hisoblagichlar va yagona ulanish
+  # jarayon ichida (app/api/store.py izohiga qarang).
+  api:
+    <<: *app
+    container_name: shaffofai-v2-tender-v2-api
+    entrypoint: ["python", "-m", "uvicorn", "api_server:app"]
+    command: ["--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    environment:
+      DATABASE_URL: *app-db
+      POSTGRES_PASSWORD: ""          # egasining paroli ilova konteyneriga tushmasin
+      LOG_FILE: ""
+    networks:
+      internal: {}
+      shaffofai-v2:
+        aliases: [tender-v2]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEMORY:-512M}
+
+  # Tekshiruv. Excel xotirada ochiladi — chegara BO'LSIN (nosog'lom fayl butun
+  # serverni yiqitmasin). Bu CHEGARA, rezerv emas: odatda 200-400 MB; 4G faqat
+  # ulkan fayl ochilganda. Xotira kam bo'lsa WORKER_MEMORY=2G — o'shanda
+  # ~150 MB dan katta fayl OOM o'rniga texnik holat (status 4) beradi.
+  worker:
+    <<: *app
+    container_name: shaffofai-v2-tender-v2-worker
+    entrypoint: ["python", "main.py"]
+    command: ["--davomiy", "-y"]
+    environment:
+      DATABASE_URL: *app-db
+      POSTGRES_PASSWORD: ""
+      DOWNLOAD_DIR: /data/downloads
+      ETALON_CACHE_DIR: /data/etalon_cache
+      LOG_FILE: ""
+    volumes:
+      - etalon-cache:/data/etalon_cache
+      - downloads:/data/downloads
+    networks: [internal, egress]
+    healthcheck:
+      test: ["CMD", "python", "jobs_worker.py", "--health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${WORKER_MEMORY:-4G}
+        reservations:
+          memory: 512M
+    # SIGTERM — joriy fayl tugagach xavfsiz to'xtaydi
+    stop_signal: SIGTERM
+    stop_grace_period: 120s
+
+  # Chiquvchi yuboruvchi. `--health`: https, kalitlar, navbat jadvali, toshqin.
+  sender:
+    <<: *app
+    container_name: shaffofai-v2-tender-v2-sender
+    entrypoint: ["python", "yuboruvchi.py"]
+    command: ["--davomiy"]
+    environment:
+      DATABASE_URL: *app-db
+      POSTGRES_PASSWORD: ""
+      LOG_FILE: ""
+    networks: [internal, egress]
+    healthcheck:
+      test: ["CMD", "python", "yuboruvchi.py", "--health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: ${SENDER_MEMORY:-256M}
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
+
+networks:
+  # Baza faqat shu tarmoqda — undan tashqariga yo'l yo'q.
+  internal:
+    internal: true
+  # Worker (fayllarni yuklash) va yuboruvchi (tender API) uchun internet.
+  egress: {}
+  # Platforma tarmog'i (gateway stack yaratadi): router API ni `tender-v2:8000`
+  # sifatida ko'radi.
+  shaffofai-v2:
+    external: true
+
+volumes:
+  pgdata:
+  etalon-cache:
+  downloads:

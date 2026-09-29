@@ -1,0 +1,9 @@
+# Repozitoriyda satr oxiri LF (Windows'da git checkout paytida CRLF qiladi).
+* text=auto
+# Konteynerda ishlaydigan skriptlar — HAR DOIM LF (CRLF bilan bash yiqiladi).
+*.sh text eol=lf
+*.sql text eol=lf
+Dockerfile text eol=lf
+# Test fikstura fayllari — ikkilik
+*.xlsx binary
+*.xls binary

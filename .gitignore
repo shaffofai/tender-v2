@@ -1,0 +1,36 @@
+# Sirlar. Tarixga tushgan kalit o'chirilmaydi — ALMASHTIRILADI.
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Ish vaqtidagi ma'lumotlar
+_downloads/
+_etalon_cache/
+_quruq_yuklash/
+*.log
+logs/
+kuzatuv_*.xlsx
+
+# Haqiqiy tender hujjatlari (maxfiy) — repozitoriyga EMAS
+korpus/
+data/
+data_new/
+etalon/
+
+# Muharrir va OS fayllari
+.idea/
+.vscode/
+.claude/
+.DS_Store
+Thumbs.db
+~$*
