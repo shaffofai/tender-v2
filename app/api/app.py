@@ -7,8 +7,6 @@ to'xtatildi. Fayl haqidagi ma'lumot SHU API orqali keladi:
     POST /api-v2/tender-v2/check
     Authorization: Basic <base64(login:parol)>
 
-    GET  /api-v2/tender-v2/health      (ichkarida: /health — xuddi shu javob)
-
     {"file_id": 1, "tender_id": 2, "link": "...", "type": "excel1",
      "role": "offeror"}
 
@@ -17,6 +15,10 @@ to'xtatildi. Fayl haqidagi ma'lumot SHU API orqali keladi:
     offeror    -> `files` + `jobs_state` (tekshiruv navbati)
 
 API bazaga yozgach DARHOL javob qaytaradi — tekshirilishini kutmaydi.
+
+Holat: GET /api-v2/tender-v2/health. Ikkala yo'l prefikssiz ham ishlaydi
+(`/check`, `/health`): kompaniya edge'i prefiksni kesib yuboradi — `health`
+oldidagi izohga qarang.
 
 Ishga tushirish:
     uvicorn api_server:app --host 0.0.0.0 --port 8000
@@ -88,9 +90,12 @@ app = FastAPI(title="Tender fayl qabul API", version="1.0", lifespan=_hayot,
               openapi_url="/openapi.json" if _DOCS else None)
 
 
-# Ikki yo'l, bitta javob: `/health` — konteyner healthcheck'i (ichkaridan);
-# `/api-v2/tender-v2/health` — tashqaridan: ai.shq.uz so'rovni prefiksi bilan
-# to'liq uzatadi (2026-09-29 dan edge prefiksni kesmaydi).
+# Har tashqi yo'l ikki shaklda keladi, ikkalasi ham bitta ishlovchiga:
+#   `/api-v2/tender-v2/<yo'l>` — to'liq yo'l (gateway router shunday uzatadi);
+#   `/<yo'l>`                  — kompaniya edge'i `/api-v2/tender-v2` prefiksini
+#                                KESIB yuboradi (2026-09-29 da tekshirildi:
+#                                `.../api-v2/tender-v2/api-v2/tender-v2/check` → 401).
+# Edge tuzatilsa ham hech narsa buzilmaydi. `/health` — konteyner healthcheck'i ham.
 @app.get("/health", responses={200: {"model": models.HealthJavob},
                                  503: {"model": models.HealthJavob}})
 @app.get("/api-v2/tender-v2/health", responses={200: {"model": models.HealthJavob},
@@ -120,6 +125,7 @@ def health():
                      503: {"model": models.XatoJavob}},
           openapi_extra={"requestBody": {"required": True, "content": {
               "application/json": {"examples": models.SOROV_NAMUNALARI}}}})
+@app.post("/check", include_in_schema=False)          # edge prefiksni kesgan yo'l
 async def fayllarni_qabul_qil(request: Request):
     ok, sabab = _auth_ok(request)
     if not ok:

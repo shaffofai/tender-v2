@@ -90,6 +90,10 @@
    "deb67026365bd7cf775d20dec0043c796b3727ff93b00c55eac05dc4bea859ca"
   ],
   [
+   "auth: none (edge path)",
+   "deb67026365bd7cf775d20dec0043c796b3727ff93b00c55eac05dc4bea859ca"
+  ],
+  [
    "auth: wrong password",
    "31b5a225f7c288e28144bfab82251ac2f3a4810ebb69c64d4334d602d45c0ca1"
   ],
@@ -111,6 +115,10 @@
   ],
   [
    "body: not json",
+   "53f3cb4170c7ae53e3944aa1137ce1b86e0e42136b36732bd412b611ca141634"
+  ],
+  [
+   "body: not json (edge path)",
    "53f3cb4170c7ae53e3944aa1137ce1b86e0e42136b36732bd412b611ca141634"
   ],
   [

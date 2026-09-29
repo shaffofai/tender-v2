@@ -89,9 +89,12 @@ curl -s -o /dev/null -w '%{http_code}\n' https://ai.shq.uz/api-v2/tender-v2/heal
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ai.shq.uz/api-v2/tender-v2/check           # 401
 ```
 
-> 2026-09-29 dan kompaniya edge'i `/api-v2/tender-v2/...` yo'lini to'liq
-> (prefiksi bilan) `192.168.100.60:8084` ga yetkazadi. Tashqi `.../check`
-> 404 qaytarsa — prefiks yana kesilyapti: DevOps bilan tekshiring.
+> Kompaniya edge'i `/api-v2/tender-v2/...` ni `192.168.100.60:8084` ga
+> prefiksini KESIB yuboradi (2026-09-29 da tekshirildi:
+> `POST .../api-v2/tender-v2/api-v2/tender-v2/check` → 401). Shuning uchun ilova
+> har yo'lni ikki shaklda qabul qiladi — `/api-v2/tender-v2/check` va `/check`,
+> `/api-v2/tender-v2/health` va `/health` (bitta ishlovchi). Edge tuzatilsa ham
+> hech narsa buzilmaydi.
 
 ## 4. Eski `tender_deploy` dan o'tish (ma'lumot bilan)
 
@@ -232,7 +235,7 @@ sudo docker compose logs --since 5m worker sender | tail -30
 
 Tashqaridan (noutbukdan): `https://ai.shq.uz/api-v2/tender-v2/health` → 200,
 `POST https://ai.shq.uz/api-v2/tender-v2/check` (parolsiz) → 401. `.../check`
-404 bersa — edge prefiksni yana kesyapti (3-bo'lim oxiridagi eslatma).
+404 bersa — ishlayotgan rasm `/check` yo'lidan oldingi (3-bo'lim oxiridagi eslatma).
 
 ### 4.4 Yakun — tekshiruvlar o'tgach
 
