@@ -7,6 +7,8 @@ to'xtatildi. Fayl haqidagi ma'lumot SHU API orqali keladi:
     POST /api-v2/tender-v2/check
     Authorization: Basic <base64(login:parol)>
 
+    GET  /api-v2/tender-v2/health      (ichkarida: /health — xuddi shu javob)
+
     {"file_id": 1, "tender_id": 2, "link": "...", "type": "excel1",
      "role": "offeror"}
 
@@ -86,8 +88,13 @@ app = FastAPI(title="Tender fayl qabul API", version="1.0", lifespan=_hayot,
               openapi_url="/openapi.json" if _DOCS else None)
 
 
+# Ikki yo'l, bitta javob: `/health` — konteyner healthcheck'i (ichkaridan);
+# `/api-v2/tender-v2/health` — tashqaridan: ai.shq.uz so'rovni prefiksi bilan
+# to'liq uzatadi (2026-09-29 dan edge prefiksni kesmaydi).
 @app.get("/health", responses={200: {"model": models.HealthJavob},
                                  503: {"model": models.HealthJavob}})
+@app.get("/api-v2/tender-v2/health", responses={200: {"model": models.HealthJavob},
+                                                 503: {"model": models.HealthJavob}})
 def health():
     holat = {"xizmat": "api_server", "hisob": dict(HISOB)}
     try:

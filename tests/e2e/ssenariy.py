@@ -545,6 +545,7 @@ def scenario(prof):  # noqa: C901 — ssenariy ATAYLAB bitta ro'yxat
     # ── 3. API: the real traffic ───────────────────────────────────────────
     with Api(X("api"), env):
         api("health (fresh)", method="GET", path="/health")
+        api("health (fresh, public path)", method="GET", path="/api-v2/tender-v2/health")
         api("auth: none", [F(1, L("a.xlsx"), "excel1")], auth=None)
         api("auth: wrong password", [F(1, L("a.xlsx"), "excel1")], auth=basic(LOGIN, "nope"))
         api("auth: wrong user", [F(1, L("a.xlsx"), "excel1")], auth=basic("x", PAROL))

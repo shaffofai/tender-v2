@@ -89,11 +89,9 @@ curl -s -o /dev/null -w '%{http_code}\n' https://ai.shq.uz/api-v2/tender-v2/heal
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://ai.shq.uz/api-v2/tender-v2/check           # 401
 ```
 
-> Kompaniya edge'i hozir `/api-v2/tender-v2/` prefiksini KESIB 8084 ga
-> yuboradi — ilova `/check` ni oladi va 404 qaytaradi (`/health` esa 200:
-> u ulanishni tasdiqlaydi, yo'lni emas). DevOps prefiksni saqlasin (yoki bu
-> qoidani olib tashlasin — so'rovlar gateway router orqali keladi, u yo'lni
-> to'liq uzatadi).
+> 2026-09-29 dan kompaniya edge'i `/api-v2/tender-v2/...` yo'lini to'liq
+> (prefiksi bilan) `192.168.100.60:8084` ga yetkazadi. Tashqi `.../check`
+> 404 qaytarsa — prefiks yana kesilyapti: DevOps bilan tekshiring.
 
 ## 4. Eski `tender_deploy` dan o'tish (ma'lumot bilan)
 
@@ -139,6 +137,10 @@ jadvallar ham bor.
 
 ### 4.2 O'rnatish — eski stek ishlashda davom etadi
 
+Rasm klonlangan commit'ga bog'lanadi (`TAG=sha-<commit>`) — shu commit'ning
+CI'i yashil bo'lgach yurgizing (aks holda `pull` rasmni topmaydi, hech narsa
+to'xtamaydi — kutib, qayta yurgizing).
+
 ```bash
 cd ~ && git clone https://github.com/shaffofai/tender-v2.git shaffofai-tender-v2 && cd ~/shaffofai-tender-v2 && git log -1 --format='%h %s'
 ```
@@ -167,12 +169,12 @@ else ( umask 077
 sed -i -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" \
        -e "s/^APP_DB_PASSWORD=$/APP_DB_PASSWORD=$(openssl rand -hex 24)/" \
        -e "s/^EDGE_BIND=.*/EDGE_BIND=192.168.100.60/" \
-       -e "s/^TAG=.*/TAG=sha-acfa592f0308bf503688e974d2ab816fa3056b42/" .env
+       -e "s/^TAG=.*/TAG=sha-$(git rev-parse HEAD)/" .env
 grep -q '^COMPOSE_FILE=' .env || printf '\n# every `sudo docker compose` in this folder also reads the edge file\nCOMPOSE_FILE=docker-compose.yml:docker-compose.edge.yml\n' >> .env
 stat -c '%a %U' .env                                        # 600 debian
 grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[[:space:]]*(#.*)?$' .env || echo "no empty values"
 sudo docker compose config --quiet && echo "config OK"
-sudo docker compose config --images | sort -u              # postgres:17 + ghcr.io/...:sha-acfa592f...
+sudo docker compose config --images | sort -u              # postgres:17 + ghcr.io/...:sha-<klonlangan commit>
 sudo docker compose config | grep -A5 '^    ports:'        # host_ip: 192.168.100.60 / target: 8000 / published: "8084"
 ```
 
@@ -182,7 +184,7 @@ sudo docker compose config | grep -A5 '^    ports:'        # host_ip: 192.168.10
 
 ```bash
 sudo docker compose pull
-sudo docker image ls ghcr.io/shaffofai/shaffofai-tender-v2   # TAG sha-acfa592f...
+sudo docker image ls ghcr.io/shaffofai/shaffofai-tender-v2   # TAG sha-<klonlangan commit>
 sudo docker compose up -d --no-build db migrate
 sudo docker wait shaffofai-v2-tender-v2-migrate               # 0
 sudo docker logs shaffofai-v2-tender-v2-migrate               # 0001_boshlangich_sxema qo'llandi, ilova roli yaratildi: tender_ai
@@ -228,8 +230,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://192.168.100.60:8084/api-
 sudo docker compose logs --since 5m worker sender | tail -30
 ```
 
-Tashqaridan (noutbukdan): `https://ai.shq.uz/api-v2/tender-v2/health` → 200.
-`POST .../check` → edge prefiksni kesguncha 404, keyin 401.
+Tashqaridan (noutbukdan): `https://ai.shq.uz/api-v2/tender-v2/health` → 200,
+`POST https://ai.shq.uz/api-v2/tender-v2/check` (parolsiz) → 401. `.../check`
+404 bersa — edge prefiksni yana kesyapti (3-bo'lim oxiridagi eslatma).
 
 ### 4.4 Yakun — tekshiruvlar o'tgach
 
