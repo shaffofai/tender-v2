@@ -35,7 +35,7 @@ import time
 
 import psycopg
 
-from app import config
+from app import config, jurnal
 from app.db import DATABASE_URL, safe_dsn, schema
 from app.db.schema import JOBS_TABLE, _pk, _yashamayotgan, _yuborilmagan
 from app.log import _utf8_stdout, log
@@ -201,6 +201,10 @@ def tekshirishni_boshla(chegara=None, davomiy=False, tasdiqsiz=False):
 
     with psycopg.connect(DATABASE_URL, autocommit=False) as conn:
         schema.tekshir(conn)
+        # So'rov jurnali: shu yerdan boshlab worker'ning log satrlari
+        # `sorov_jurnali` ga ham tushadi (O'Z ulanishida, alohida oqimda).
+        # `--quruq` bu yerga kelmaydi — u bazaga hech narsa yozmaydi.
+        jurnal.boshla("worker")
         _etalon_manbaini_tekshir(conn)
 
         if not boshlashdan_oldin(conn, tasdiqsiz, davomiy):

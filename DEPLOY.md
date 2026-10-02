@@ -36,6 +36,10 @@ Nomlar serverdagi eski `~/tender_deploy` konteynerlari (`tender-postgres`,
 - Ilova bazaga minimal huquqli `tender_ai` roli bilan ulanadi; jadvallar egasi
   (`POSTGRES_USER`) faqat `migrate` da. `validation_evidence` append-only
   (trigger) — ilova uni o'chira olmaydi.
+- So'rov jurnali (`sorov_jurnali`, migratsiya `0002`) asosiy ishni to'xtatmaydi:
+  alohida oqim, o'z ulanishi; baza yotsa API avvalgidek javob beradi, jurnal
+  yozuvlari esa navbatda kutadi (to'lsa — tashlanadi). Ilova roli jurnalga faqat
+  qo'sha oladi (SELECT, INSERT). Nima yozilishi — `README.md`, «So'rov jurnali».
 
 ## 2. Talablar
 
@@ -61,11 +65,11 @@ cd ~ && git clone https://github.com/shaffofai/tender-v2.git shaffofai-tender-v2
 cd ~/shaffofai-tender-v2
 cp .env.example .env && chmod 600 .env
 nano .env        # POSTGRES_PASSWORD, APP_DB_PASSWORD (openssl rand -hex 24), KIRUVCHI_*, TENDER_API_*,
-                 # EDGE_BIND=192.168.100.60, TAG=sha-<commit>
+                 # JURNAL_LOGIN, JURNAL_PAROL (openssl rand -hex 24), EDGE_BIND=192.168.100.60, TAG=sha-<commit>
 sudo docker compose config --quiet && echo "config OK"
 sudo docker compose pull
 sudo docker compose up -d --no-build
-sudo docker logs shaffofai-v2-tender-v2-migrate    # «0001_boshlangich_sxema qo'llandi»
+sudo docker logs shaffofai-v2-tender-v2-migrate    # «0001_boshlangich_sxema qo'llandi», «0002_sorov_jurnali qo'llandi»
 sudo docker compose ps                             # db, api, worker, sender — healthy
 ```
 
@@ -183,14 +187,16 @@ sudo docker compose config | grep -A5 '^    ports:'        # host_ip: 192.168.10
 
 `+` ro'yxatida `KIRUVCHI_LOGIN`, `KIRUVCHI_PAROL`, `TENDER_API_URL`,
 `TENDER_API_LOGIN`, `TENDER_API_PAROL` bo'lishi SHART. Bo'sh qiymat faqat
-`TENDER_STATUS_XARITA` da bo'lishi mumkin.
+`TENDER_STATUS_XARITA`, `JURNAL_LOGIN` va `JURNAL_PAROL` da bo'lishi mumkin
+(jurnal kalitlari bo'sh bo'lsa `/jurnal` 503 beradi, qolgan hammasi ishlaydi —
+§6 da to'ldiriladi).
 
 ```bash
 sudo docker compose pull
 sudo docker image ls ghcr.io/shaffofai/shaffofai-tender-v2   # TAG sha-<klonlangan commit>
 sudo docker compose up -d --no-build db migrate
 sudo docker wait shaffofai-v2-tender-v2-migrate               # 0
-sudo docker logs shaffofai-v2-tender-v2-migrate               # 0001_boshlangich_sxema qo'llandi, ilova roli yaratildi: tender_ai
+sudo docker logs shaffofai-v2-tender-v2-migrate               # 0001_boshlangich_sxema qo'llandi, 0002_sorov_jurnali qo'llandi, ilova roli yaratildi: tender_ai
 USTUN_Q="select table_name||'.'||column_name||' '||data_type from information_schema.columns where table_schema = 'public' and table_name in ($JADVALLAR) order by 1"
 diff <(eski -At -c "$USTUN_Q") <(yangi -At -c "$USTUN_Q") && echo "COLUMNS IDENTICAL ($(eski -At -c "$USTUN_Q" | wc -l))"
 ```
@@ -285,6 +291,28 @@ Qaytish — oldingi `TAG` bilan aynan shu. Migratsiyalar faqat QO'SHADI (eski
 kod yangi sxema bilan ishlaydi); ustun o'chiradigan migratsiya bo'lsa, shu
 yerda alohida yoziladi.
 
+**So'rov jurnali qo'shilgan versiyaga o'tish** (sxema 1 → 2). Yuqoridagi uch
+qatordan keyin:
+
+```bash
+sudo docker logs shaffofai-v2-tender-v2-migrate | tail -2
+sudo docker compose exec worker python -m app.db.migrate --holat
+```
+
+Kutiladi — `migrate` logining oxirgi ikki satri (har biri sana-vaqt bilan boshlanadi):
+
+```
+... INFO    [migratsiya] 0002_sorov_jurnali qo'llandi
+... INFO    [migratsiya] «tender_ai» huquqlari yangilandi (app/db/huquqlar.sql)
+```
+
+va `--holat` da ikkala migratsiya `qo'llangan`. `0002` faqat yangi jadval
+(`sorov_jurnali`) qo'shadi — mavjud jadvallarga tegmaydi. Yangi rasm sxema
+versiyasi 2 ni TALAB qiladi (`migrate` yurmagan bo'lsa xizmatlar «baza sxemasi
+eski» deb to'xtaydi); eski rasm esa versiya 2 bilan o'zgarishsiz ishlaydi —
+qaytish uchun bazada hech narsa qilish shart emas. Jurnalni o'qish kalitlari —
+§6 («So'rov jurnali»).
+
 `docker compose stop` **xavfsiz**: worker joriy faylni tugatib to'xtaydi
 (SIGTERM, 120 s), yarim ishlangan fayl lease tugagach qayta navbatga tushadi.
 
@@ -330,6 +358,64 @@ SELECT f.file_id, s.dead_at, s.dead_reason FROM jobs_state s
 kuni bo'yicha 7 ta fayl `/home/debian/backups/` da). Vaqti-vaqti bilan bittasini
 serverdan tashqariga ko'chiring: bir diskdagi zaxira disk bilan birga yo'qoladi.
 
+### So'rov jurnali
+
+Kim, qachon, nima yuborgani va nima javob olgani — `sorov_jurnali` jadvalida
+(mazmuni: `README.md`, «So'rov jurnali»). O'qish kalitlarini bir marta qo'ying
+(sherikka bergan `KIRUVCHI_*` EMAS; parol kamida 24 belgi, aks holda 503):
+
+```bash
+cd ~/shaffofai-tender-v2
+grep -q '^JURNAL_LOGIN=' .env || printf '\nJURNAL_LOGIN=\nJURNAL_PAROL=\n' >> .env
+sed -i -e "s/^JURNAL_LOGIN=$/JURNAL_LOGIN=jurnal/" -e "s/^JURNAL_PAROL=$/JURNAL_PAROL=$(openssl rand -hex 24)/" .env
+sudo docker compose up -d --no-build api
+```
+
+O'qish (serverning o'zidan; qiymatlar ekranga chiqmaydi — `curl` ularni `.env` dan oladi):
+
+```bash
+J=$(sed -n 's/^JURNAL_LOGIN=//p' .env):$(sed -n 's/^JURNAL_PAROL=//p' .env)
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal?limit=5"; echo                     # oxirgi 24 soat, yangisi birinchi
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal?tur=kirish"; echo                  # rad etilgan kirishlar (401)
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal?tur=sorov&holat_kodi=503"; echo    # biz 503 bergan so'rovlar
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal?daraja=error&manba=worker"; echo   # worker xatolari
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal/12345"; echo                       # bitta yozuv to'liq (tanalari bilan)
+curl -s -u "$J" "http://192.168.100.60:8084/jurnal?keyin_id=12345"; echo              # 12345 dan KEYIN yozilganlar
+```
+
+Tashqaridan — `https://ai.shq.uz/api-v2/tender-v2/jurnal` (o'sha kalitlar).
+Yoki to'g'ridan-to'g'ri SQL bilan (yuqoridagi `psql`):
+
+```sql
+SELECT tur, manba, count(*), min(yaratildi), max(yaratildi) FROM sorov_jurnali GROUP BY 1, 2 ORDER BY 1, 2;
+SELECT id, yaratildi, usul, yol, holat_kodi, davomiylik_ms, ip, login, tasdiqlangan
+  FROM sorov_jurnali WHERE tur = 'sorov' ORDER BY id DESC LIMIT 20;
+SELECT yaratildi, ip, login, qoshimcha->>'sabab' AS sabab FROM sorov_jurnali WHERE tur = 'kirish' ORDER BY id DESC LIMIT 20;
+SELECT yaratildi, manba, hodisa, qoshimcha FROM sorov_jurnali WHERE tur = 'amal' ORDER BY id DESC;   -- --requeue / --qayta-och
+SELECT pg_size_pretty(pg_total_relation_size('sorov_jurnali'));
+```
+
+**Saqlash muddati.** Ilova roli jurnalni o'chira OLMAYDI (faqat SELECT, INSERT)
+— eskirgan yozuvlarni jadval EGASI o'chiradi, ya'ni `db` konteyneri ichidan
+(`POSTGRES_USER`). Jadval tungi zaxiraga ham tushadi (7 ta nusxa), shuning
+uchun muddatsiz qoldirmang. Qo'lda (muddatni o'zingiz belgilang — bu yerda 90 kun):
+
+```bash
+sudo docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM sorov_jurnali WHERE yaratildi < now() - make_interval(days => 90)"'
+```
+
+Chiqishi — `DELETE <o'chirilgan qatorlar soni>`. Har kecha avtomatik — root
+crontab'iga (`sudo crontab -e`), zaxira qatoridan keyin:
+
+```
+45 3 * * * docker exec shaffofai-v2-tender-v2-db sh -c 'exec psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM sorov_jurnali WHERE yaratildi < now() - make_interval(days => 90)"' >>/home/debian/backups/nightly.log 2>&1
+```
+
+API logida (`docker compose logs api`) `[jurnal] bazaga yozilmadi (...)` —
+yozuvchi oqim bazaga ulana olmayapti (yozuvlar navbatda, o'zi qayta urinadi);
+tiklangach `[jurnal] yozish tiklandi` chiqadi. Har ikkalasi faqat holat
+o'zgarganda, bir martadan yoziladi.
+
 ## 7. Nosozliklar
 
 | Belgi | Sabab | Yechim |
@@ -343,6 +429,13 @@ serverdan tashqariga ko'chiring: bir diskdagi zaxira disk bilan birga yo'qoladi.
 | fayllar `status = 0` da qolmoqda | texnik sabab (rad EMAS) | `python jobs_worker.py --dead-letters`, keyin `--requeue all` |
 | 3/4 xabarlari `holat=3` (422) | sherik validatori `in:1,2` | kengaytirilgach `python yuboruvchi.py --qayta-och 3,4` |
 | disk to'ldi | etalon keshi | `python jobs_worker.py --kesh-tozala` yoki `ETALON_CACHE_MAX_MB` |
+| `/jurnal` → 503 `jurnalni o'qish sozlanmagan` | `JURNAL_LOGIN` / `JURNAL_PAROL` yo'q yoki parol 24 belgidan qisqa | §6 «So'rov jurnali» dagi uch qator |
+| `/jurnal` → 401, kalit to'g'ri | `KIRUVCHI_*` kalitlari ishlatilgan | jurnalning O'Z kalitlari: `JURNAL_LOGIN` / `JURNAL_PAROL` |
+| logda `[jurnal] yozuv tashlandi (InsufficientPrivilege)` | ilova rolida jurnal huquqi yo'q | `docker compose up -d migrate` (huquqlarni qayta beradi) |
+| logda `[jurnal] yozuvchi oqim yurmadi (...)` | konteynerda oqim/jarayon chegarasi tugagan; xizmat ishlayapti, lekin shu jarayon jurnalga YOZMAYAPTI | sababini bartaraf etib, o'sha xizmatni qayta ishga tushiring (`sudo docker compose restart api`) |
+| bir necha xizmat logida BIRDAN `[jurnal] bazaga yozilmadi (LockNotAvailable)`, operator buyrug'ida `[jurnal] amal yozilmadi (...): LockNotAvailable` | bitta xizmat jurnalga yozish o'rtasida qotgan (`docker compose pause`, osilgan xost) va jurnal yozish qulfini ushlab turibdi; PostgreSQL uning sessiyasini 10 s da uzadi, keyin hammasi o'zi tiklanadi (`[jurnal] yozish tiklandi`) — shu orada berilgan operator amali jurnalga tushmaydi | cho'zilsa: `sudo docker compose ps` da `Paused` xizmatni `sudo docker compose unpause <xizmat>`; yoki `sorov_jurnali` ni egasi uzoq bloklayapti (`VACUUM FULL`, `ALTER TABLE`) — tugashini kuting |
+| jurnalda `hodisa = jurnal_tashlandi`, `qoshimcha.chegaradan` bor | kalitsiz / noto'g'ri kalitli so'rovlar oqimi: daqiqasiga 600 qatordan ortig'i yozilmaydi (to'g'ri kalitli so'rovlar to'liq yoziladi) | `GET /jurnal?tur=kirish` — kim urinayotganini ko'ring; to'sish — edge tomonda |
+| jurnal juda katta | saqlash muddati qo'yilmagan | §6 dagi `DELETE` (egasi roli bilan); vaqtincha to'xtatish: `.env` da `JURNAL_YOQILGAN=0` |
 
 ## 8. Xavfsizlik
 
@@ -352,3 +445,8 @@ serverdan tashqariga ko'chiring: bir diskdagi zaxira disk bilan birga yo'qoladi.
 4. Ilova konteynerlarida jadvallar egasining paroli yo'q (`POSTGRES_PASSWORD: ""`).
 5. Kiruvchi Basic Auth — TLS ortida (kompaniya edge'i); parol base64, shifr emas.
 6. Konteynerlar ildiz huquqisiz (`uid 10001`).
+7. So'rov jurnali sherikning so'rov tanalari, IP lar va log satrlarini saqlaydi
+   va `/jurnal` edge orqali internetdan ochiq: `JURNAL_PAROL` — kamida 24 belgi
+   (`openssl rand -hex 24`), `KIRUVCHI_*` dan alohida va sherikka BERILMAYDI.
+   `Authorization` qiymati jurnalga yozilmaydi; ilova roli yozuvni o'zgartira
+   ham, o'chira ham olmaydi.

@@ -20,11 +20,16 @@ Holat: GET /api-v2/tender-v2/health. Ikkala yo'l prefikssiz ham ishlaydi
 (`/check`, `/health`): kompaniya edge'i prefiksni kesib yuboradi — `health`
 oldidagi izohga qarang.
 
+So'rov jurnali: har so'rov `sorov_jurnali` ga yoziladi (`JurnalOraliq` —
+ishlovchilarga tegmaydi); o'qish — GET /api-v2/tender-v2/jurnal, O'Z kalitlari
+bilan (app/api/jurnal.py).
+
 Ishga tushirish:
     uvicorn api_server:app --host 0.0.0.0 --port 8000
 
 Sozlamalar (.env): KIRUVCHI_LOGIN, KIRUVCHI_PAROL, MAX_TOPLAM, DOCS_ENABLED,
-RUXSAT_HOSTLAR, FILE_BASE_URL + baza ulanishi (DATABASE_URL yoki DB_*).
+RUXSAT_HOSTLAR, FILE_BASE_URL, JURNAL_LOGIN, JURNAL_PAROL, JURNAL_YOQILGAN
++ baza ulanishi (DATABASE_URL yoki DB_*).
 """
 
 import threading
@@ -34,10 +39,11 @@ import psycopg
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app import config
+from app import config, jurnal
 from app.api import models
 from app.api.auth import KIRUVCHI_LOGIN, KIRUVCHI_PAROL, _auth_ok
 from app.api.intake import elementlarni_ajrat, elementni_tekshir
+from app.api.jurnal import JurnalOraliq, royxatni_ol, yozuvni_ol
 from app.api.store import ULANISH, _shablon_uygot, elementni_yoz
 from app.db import safe_dsn
 from app.log import log
@@ -67,6 +73,9 @@ def _sana(kalit, n=1):
 @asynccontextmanager
 async def _hayot(_app):
     """Ishga tushish/to'xtash (FastAPI lifespan)."""
+    # Birinchi bo'lib: pastdagi ishga tushish satrlari ham jurnalga tushsin.
+    # Baza yotgan bo'lsa ham kutmaydi — yozuvchi oqim o'zi qayta ulanadi.
+    jurnal.boshla("api")
     if not KIRUVCHI_LOGIN or not KIRUVCHI_PAROL:
         log("KIRUVCHI_LOGIN/KIRUVCHI_PAROL sozlanmagan — hamma so'rov 401 bo'ladi",
             "error")
@@ -80,6 +89,7 @@ async def _hayot(_app):
         log("[api] baza hali tayyor emas: %s" % exc, "warning")
     yield
     ULANISH.yop()
+    jurnal.toxtat()
 
 
 # /docs, /redoc, /openapi.json — standart YOPIQ (DOCS_ENABLED=1 ochadi).
@@ -88,6 +98,10 @@ app = FastAPI(title="Tender fayl qabul API", version="1.0", lifespan=_hayot,
               docs_url="/docs" if _DOCS else None,
               redoc_url="/redoc" if _DOCS else None,
               openapi_url="/openapi.json" if _DOCS else None)
+
+# So'rov jurnali — sof ASGI qatlam: javobga hech narsa qo'shmaydi, ishlovchilar
+# o'zgarmagan. Yagona oraliq qatlam, ya'ni ishlovchi istisnosini ham ko'radi.
+app.add_middleware(JurnalOraliq)
 
 
 # Har tashqi yo'l ikki shaklda keladi, ikkalasi ham bitta ishlovchiga:
@@ -207,3 +221,26 @@ async def fayllarni_qabul_qil(request: Request):
     return {"jami": len(elementlar), "qabul": hisob["qabul"],
             "yangilandi": hisob["yangilandi"], "takror": hisob["takror"],
             "xato": hisob["xato"], "natijalar": natijalar}
+
+
+# So'rov jurnalini o'qish — O'Z kalitlari bilan (JURNAL_LOGIN / JURNAL_PAROL):
+# sherikning KIRUVCHI_* kalitlari bu yerda ISHLAMAYDI. Sinxron `def` —
+# threadpool'da: o'qish hodisa siklini (`/check`) ham, `ULANISH.qulf` ni ham
+# band qilmaydi (app/api/jurnal.py). Filtrlar qo'lda tahlil qilinadi — xato
+# `/check` dagidek `{"xato": ...}` bilan qaytadi.
+@app.get("/api-v2/tender-v2/jurnal",
+         responses={400: {"model": models.XatoJavob},
+                    401: {"model": models.XatoJavob},
+                    503: {"model": models.XatoJavob}})
+@app.get("/jurnal", include_in_schema=False)          # edge prefiksni kesgan yo'l
+def jurnal_royxati(request: Request):
+    return royxatni_ol(request)
+
+
+@app.get("/api-v2/tender-v2/jurnal/{jid}",
+         responses={401: {"model": models.XatoJavob},
+                    404: {"model": models.XatoJavob},
+                    503: {"model": models.XatoJavob}})
+@app.get("/jurnal/{jid}", include_in_schema=False)
+def jurnal_yozuvi(request: Request, jid: str):
+    return yozuvni_ol(request, jid)

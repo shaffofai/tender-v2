@@ -29,10 +29,11 @@ tender tizimi ──POST /api-v2/tender-v2/check──► api ──► files / 
 app/                    xizmat qatlami — faylni olib keladi, verdiktni saqlaydi va yetkazadi
   config.py             HAR BIR sozlama (muhit o'zgaruvchisi) — yagona manba
   log.py, download.py   loglash; himoyalangan yuklab olish + host oq ro'yxati (SSRF)
+  jurnal.py             so'rov jurnali (`sorov_jurnali`): navbat + yozuvchi oqim
   templates.py          buyurtmachi shablonlari (`templates`) va etalon keshi
   db/                   qat'iy sxema, versiyalangan migratsiyalar, minimal huquqlar
   worker/               navbat, darvozalar, audit, `ishni_bajar` quvuri, sikllar, CLI
-  api/                  kiruvchi API (auth, yukni tekshirish, bazaga yozish)
+  api/                  kiruvchi API (auth, yukni tekshirish, bazaga yozish, so'rov jurnali)
   sender/               chiquvchi yuboruvchi (status xaritasi, outbox, texnik xabarlar)
   tools/                operator vositalari: korish, kuzatuv, ishga_tushir
 tender_engine/          tekshiruv MANTIG'I — `app/` ni bilmaydi
@@ -68,6 +69,8 @@ python jobs_worker.py --requeue <files.id|all>
 python jobs_worker.py --shablonlar | --shablonlarni-tayyorla | --kesh-tozala
 python korish.py [--fayllar|--natijalar|--kamchilik|--tender ID|--sql]
 python kuzatuv.py [--soat 2|--fayl ID|--muammo|--xlsx]
+
+curl -u "$JURNAL_LOGIN:$JURNAL_PAROL" "http://127.0.0.1:8000/jurnal?tur=kirish&limit=20"   # so'rov jurnali
 ```
 
 ## Sozlama
@@ -81,12 +84,70 @@ yuboruvchining xato sozlamasi worker'ni yiqitmaydi.
 Tender-v2 ning **o'z** PostgreSQL bazasi bor (compose: `db`), platformaning
 umumiy bazasidan alohida. Sxema — `app/db/migrations/` (versiyalangan, har biri
 o'z tranzaksiyasida, `schema_migrations` da qayd). Qo'llangan migratsiyani
-tahrirlamang: o'zgarish = yangi fayl (`0002_...sql`) + `app/db/schema.py`
-dagi `KERAKLI_VERSIYA` ni oshirish.
+tahrirlamang: o'zgarish = yangi fayl (`0003_...sql`) + `app/db/schema.py`
+dagi `KERAKLI_VERSIYA` ni oshirish (hozir 2: `0001` boshlang'ich sxema, `0002`
+so'rov jurnali) + yangi jadval huquqi `app/db/huquqlar.sql` ga.
 
 Ilova minimal huquqli `APP_DB_USER` bilan ulanadi (`app/db/huquqlar.sql`);
 jadvallar egasi — migratsiya roli. Shuning uchun ilova `validation_evidence`
 ning append-only triggerini o'chira olmaydi.
+
+## So'rov jurnali
+
+Verdikt dalili (`validation_evidence`, `jobs_validation_log`) va outbox
+(`yuborish_navbati`) ilgaridan bor. Ulardan TASHQARI hamma narsa
+`sorov_jurnali` jadvaliga yoziladi (`tur` ustuni):
+
+| `tur` | Nima | Kim yozadi |
+|---|---|---|
+| `sorov` | API ga kelgan har so'rov: yo'l, holat kodi, davomiylik, IP, da'vo qilingan login, so'rov va javob tanasi (har biri 64 KiB gacha) | `app/api/jurnal.py` — sof ASGI oraliq qatlam |
+| `kirish` | rad etilgan autentifikatsiya (401) — sababi bilan | o'sha yerdan |
+| `log` | `tender` loggerining satrlari (`manba`: `api`, `worker`, `sender`); so'rov ichida yozilgani o'sha so'rovning `sorov_id` si bilan | `app/jurnal.py` — log ulagichi |
+| `amal` | operator amali: `--requeue`, `--qayta-och` | buyruqning o'zi, sinxron |
+
+**Jurnal asosiy ishni to'xtatmaydi.** Yozuvlar xotiradagi navbatga tushadi
+(2 000 qator / 8 MiB gacha) va alohida oqim ularni O'Z ulanishida, to'plam bilan
+yozadi — API ning yagona ulanishi va qulfiga tegilmaydi. Baza yotgan bo'lsa API
+avvalgidek javob beradi; navbat to'lsa yozuv tashlanadi va soni jurnalga
+yoziladi. Oraliq qatlam javobga hech narsa qo'shmaydi (sarlavha ham).
+Jarayon to'xtaganda oxirgi yozuvlarga 2 soniya beriladi.
+Tekshirilmagan so'rovlar (kalitsiz yoki noto'g'ri kalitli: 401, 404, 405 ...)
+daqiqasiga 600 qatorgacha yoziladi — ortig'i tashlanadi va o'sha hisobga
+qo'shiladi (`hodisa = jurnal_tashlandi`, `qoshimcha.chegaradan`); to'g'ri
+kalitli so'rovlar va log satrlari cheklanmaydi.
+
+**Yozilmaydi:** `GET /health` → 200 (healthcheck); `Authorization` qiymati
+(faqat sxemasi); `/jurnal` javoblarining tanasi (faqat hajmi); 401 bilan
+tugagan so'rovning tanasi (ishlovchi uni o'qimaydi). Kalit ko'rinishidagi
+bo'laklar (`Basic ...`, `Bearer ...`, havoladagi — nisbiy havolada ham —
+`token=`/imzo, `login:parol@`, `password=...`) `[yashirildi]` ga almashtiriladi.
+
+**O'qish** — `GET /api-v2/tender-v2/jurnal` (edge orqali `/jurnal`), Basic Auth,
+kalitlar `JURNAL_LOGIN` / `JURNAL_PAROL` (sherikning `KIRUVCHI_*` kalitlari
+ishlamaydi; parol 24 belgidan qisqa bo'lsa — 503):
+
+| Parametr | Ma'nosi |
+|---|---|
+| `dan`, `gacha` | vaqt oralig'i, ISO 8601 (`2026-09-30T10:00:00Z`; mintaqasiz qiymat — UTC). Standart: oxirgi 24 soat |
+| `tur`, `manba`, `daraja` | `sorov`/`kirish`/`log`/`amal`; `api`/`worker`/`sender`; `info`/`warning`/`error` |
+| `holat_kodi`, `login`, `yol` | aniq qiymat; `yol` — yo'l boshi bo'yicha |
+| `sorov_id` | aniq qiymat: bitta so'rovning hamma qatorlari — `sorov`, `kirish` va so'rov davomidagi `log` satrlari |
+| `limit` | 1..500 (standart 100) |
+| `oldin_id` | keyingi sahifa (yangisi birinchi): javobdagi `keyingi_oldin_id` |
+| `keyin_id` | kuzatish: shu `id` dan KEYIN yozilganlar, o'sish tartibida; javobdagi `keyingi_keyin_id` bilan davom etiladi |
+
+Kuzatishda `keyingi_keyin_id` filtr hech narsa topmasa ham oldinga siljiydi —
+so'rov ko'rib chiqqan eng katta `id` ga (sahifa to'la bo'lsa — oxirgi qatorga).
+Ro'yxat tanalarsiz (faqat uzunligi); to'liq yozuv — `GET .../jurnal/{id}`.
+Xatolar `{"xato": "..."}` (400 — noto'g'ri filtr, 404 — yozuv yo'q).
+
+**Ma'lum chegaralar:** worker'ning har fayl bo'yicha ekranga chiqaradigan
+satrlari va `--health` chiqishi `print()` — jurnalga tushmaydi; `migrate` va
+faqat o'qiydigan operator vositalari qayd etilmaydi; `amal` yozuvida operator
+kimligi yo'q (buyruq `docker compose exec` orqali yuriladi); `ip` — edge'ning
+manzili (haqiqiy mijoz `sorov_sarlavhalari` dagi `x-forwarded-for` da, agar edge
+uni yuborsa); SIGKILL bo'lsa navbatdagi (≤ 1 s) yozuvlar yo'qoladi. Ilova roli
+jurnalni o'chira olmaydi — saqlash muddati `DEPLOY.md` §6 da.
 
 ## Testlar
 

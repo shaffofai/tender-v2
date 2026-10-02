@@ -18,6 +18,7 @@ import sys
 
 import psycopg
 
+from app import jurnal
 from app import templates as templates_db
 from app.db import DATABASE_URL, schema
 from app.db.schema import JOBS_TABLE, _kalit_join, _yashamayotgan
@@ -150,6 +151,9 @@ def main():
         return
     if args.requeue:
         with psycopg.connect(DATABASE_URL, autocommit=False) as conn:
-            requeue(conn, args.requeue)
+            soni = requeue(conn, args.requeue)
+            # Operator amali jurnalga — `requeue` o'z ishini COMMIT qilgandan keyin.
+            jurnal.amal_yoz(conn, "worker", "requeue",
+                            {"nishon": args.requeue, "soni": soni})
         return
     main_loop(once=args.once)

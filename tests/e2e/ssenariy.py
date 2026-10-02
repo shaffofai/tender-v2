@@ -55,6 +55,7 @@ DEAD_URL = "postgresql://nobody:x@127.0.0.1:1/nothing"
 P_FILES, P_TENDER, P_API = 18731, 18732, 18733
 LOGIN, PAROL = "golden", "golden-secret"
 T_LOGIN, T_PAROL = "tender-login", "tender-secret"
+J_LOGIN, J_PAROL = "jurnal-reader", "jurnal-secret-0123456789abcdef"     # parol ≥ 24 belgi
 
 
 def sozla(admin_url):
@@ -326,6 +327,21 @@ def snapshot(name):
     return step(name, kind="db", tables=data, hits=hits)
 
 
+def jurnal_snapshot(name):
+    """`sorov_jurnali` da qaysi tur/manba yozuvlari BOR — soni emas (u vaqtga bog'liq).
+
+    Sxema izi (0-qadam) faqat jadval va huquqlar KATALOGDA borligini ko'rsatadi.
+    Ustunlar ro'yxati xato, jsonb moslashuvi buzuq yoki ketma-ketlik huquqi
+    yo'q bo'lsa har INSERT yiqiladi — yozuvchi oqim buni faqat stderr ga aytadi
+    (matn solishtirilmaydi). Bu qadam ilova roli HAQIQATAN yoza olganini
+    isbotlaydi: jurnalga yozadigan hamma jarayon shu rol bilan ulanadi.
+    """
+    with psycopg.connect(ADMIN_URL, autocommit=True) as c:
+        rows = c.execute("SELECT tur, manba, count(*) > 0 FROM sorov_jurnali "
+                         "GROUP BY 1, 2 ORDER BY 1, 2").fetchall()
+    return step(name, kind="db", tables={"sorov_jurnali": [list(r) for r in rows]})
+
+
 def sxema_tavsifi(c):
     """Sxemaning PostgreSQL VERSIYASIGA bog'liq bo'lmagan tavsifi — katalogdan.
 
@@ -419,6 +435,7 @@ def basic(user, pw):
 
 
 AUTH = basic(LOGIN, PAROL)
+J_AUTH = basic(J_LOGIN, J_PAROL)
 API_BASE = f"http://127.0.0.1:{P_API}"
 CHECK = "/api-v2/tender-v2/check"
 
@@ -796,6 +813,23 @@ def scenario(prof):  # noqa: C901 — ssenariy ATAYLAB bitta ro'yxat
          order_info=[(c["body"]["results"][0]["file_id"], c["body"]["results"][0]["status"],
                  c["answer"]) if isinstance(c["body"], dict) else c["body"]
                 for c in TENDER["calls"]])
+
+    # ── 11. request journal (migration 0002) ───────────────────────────────
+    # Appended AFTER everything else on purpose: the fingerprints of the steps
+    # above stay exactly what they were before the journal existed.
+    with Api(X("api"), env):                    # JURNAL_* unset → reading is off
+        api("jurnal: unconfigured", method="GET", path="/jurnal", auth=None)
+        api("jurnal: unconfigured (public path)", method="GET",
+            path="/api-v2/tender-v2/jurnal", auth=None)
+    with Api(X("api"), base_env(JURNAL_LOGIN=J_LOGIN, JURNAL_PAROL=J_PAROL)):
+        api("jurnal: no credentials", method="GET", path="/jurnal", auth=None)
+        api("jurnal: partner credentials", method="GET", path="/jurnal")
+        api("jurnal: list (nothing matches)", method="GET",
+            path="/jurnal?tur=amal&manba=api", auth=J_AUTH)
+        api("jurnal: unknown id", method="GET", path="/api-v2/tender-v2/jurnal/0",
+            auth=J_AUTH)
+    # Every process has exited by now: each one flushed its rows on the way out.
+    jurnal_snapshot("jurnal rows")
 
 
 def yurgiz(admin_url, saqla=False):

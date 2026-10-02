@@ -30,7 +30,7 @@ import time
 
 import psycopg
 
-from app import config
+from app import config, jurnal
 from app.db import DATABASE_URL, schema
 from app.db.schema import SxemaXatosi
 from app.log import log
@@ -174,11 +174,17 @@ def main(argv=None):
         conn.rollback()
         if a.qayta_och:
             st = None if a.qayta_och == "hammasi" else _statuslar(a.qayta_och)
-            qayta_och(conn, st)
+            soni = qayta_och(conn, st)
+            # Operator amali jurnalga — `qayta_och` o'z ishini COMMIT qilgandan keyin.
+            jurnal.amal_yoz(conn, "sender", "qayta_och",
+                            {"statuslar": sorted(st) if st else None, "soni": soni})
             return 0
         if a.holat:
             holat(conn)
             return 0
+        # So'rov jurnali — faqat yuborish yo'lida: `--health` (har 60 s da yangi
+        # jarayon), `--holat` va `--qayta-och` bu yerga kelmaydi.
+        jurnal.boshla("sender")
         while not _shutdown:
             try:
                 h = aylanish(conn)

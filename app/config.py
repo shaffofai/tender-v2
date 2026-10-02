@@ -3,7 +3,7 @@
 
 Ilgari sozlamalar o'nlab joyda, modul yuklanayotganda `os.environ` dan
 o'qilardi. Endi bitta manba: har guruh (baza, worker, yuklab olish, shablon,
-API, yuboruvchi) o'z funksiyasi orqali BIR MARTA o'qiladi va tekshiriladi.
+API, yuboruvchi, jurnal) o'z funksiyasi orqali BIR MARTA o'qiladi va tekshiriladi.
 
 Guruhlar ATAYLAB alohida va dangasa (lazy): worker yuboruvchi sozlamasini
 o'qimaydi. Aks holda bitta `.env` dagi yuboruvchi xatosi (masalan man etilgan
@@ -64,7 +64,7 @@ def _matn(nom, standart=""):
 
 def tozala():
     """Keshlangan sozlamalarni tashlaydi (testlar muhitni o'zgartirgach)."""
-    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, migratsiya):
+    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, migratsiya, jurnal):
         f.cache_clear()
 
 
@@ -391,6 +391,35 @@ def migratsiya():
     return Migratsiya(
         app_db_user=_matn("APP_DB_USER", "tender_ai"),
         app_db_password=os.environ.get("APP_DB_PASSWORD", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
+# So'rov jurnali (`sorov_jurnali` — app/jurnal.py, app/api/jurnal.py)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Jurnal:
+    yoqilgan: bool
+    login: str
+    parol: str
+
+
+@functools.lru_cache(maxsize=None)
+def jurnal():
+    # ATAYLAB faqat `_matn`: bu guruhni api, worker va yuboruvchi — UCHALASI
+    # o'qiydi. Son sozlamasi bo'lsa, bitta imlo xatosi (SozlamaXatosi) uchala
+    # xizmatni to'xtatardi — jurnal esa asosiy ishni hech qachon to'xtatmasligi
+    # kerak. Navbat hajmi, qirqish chegaralari va oraliqlar shu sababli muhit
+    # o'zgaruvchisi EMAS, koddagi doimiylar (app/jurnal.py).
+    return Jurnal(
+        # Favqulodda kalit: 0 — jurnal butunlay o'chadi (so'rovlar, loglar va
+        # operator amallari yozilmaydi; `/jurnal` mavjud yozuvlarni o'qiyveradi).
+        yoqilgan=_matn("JURNAL_YOQILGAN", "1") not in ("0", "false", "no"),
+        # `GET /jurnal` kalitlari — KIRUVCHI_* dan ALOHIDA: sherik (tender
+        # tizimi) jurnalni o'qiy olmasin. Yo'q yoki parol qisqa bo'lsa — 503.
+        login=_matn("JURNAL_LOGIN"),
+        parol=_matn("JURNAL_PAROL"),
     )
 
 

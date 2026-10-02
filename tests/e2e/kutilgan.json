@@ -3,7 +3,7 @@
  "qadamlar": [
   [
    "schema",
-   "d57e05347b8afb476a6f74bf2cfa8be1ceda22f622c3e284bacb21a9a7c068c3"
+   "8c1371d95c4af73aa2fa556f91ee9b121429db80903d296611dfaae2e0fd781b"
   ],
   [
    "worker --health (empty db)",
@@ -508,6 +508,42 @@
   [
    "tender platform received",
    "007f965476a36b7758257859b61df8dad31885ad3c79cba253628b663a3db4c2"
+  ],
+  [
+   "jurnal: unconfigured",
+   "b199ea03e9ecc920402e8859d26089f2135e1759290007c9411e2590b4577232"
+  ],
+  [
+   "jurnal: unconfigured (public path)",
+   "b199ea03e9ecc920402e8859d26089f2135e1759290007c9411e2590b4577232"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "jurnal: no credentials",
+   "a98282c511c04beff6e04b69ca7c597b508aa6c6c5208539bfa657c179196638"
+  ],
+  [
+   "jurnal: partner credentials",
+   "7d4ec25af6357288ff334c9721c047eb9463c8504e2feb77ef5a5601138b5d8f"
+  ],
+  [
+   "jurnal: list (nothing matches)",
+   "8ca26a9df81e1370750779cd0923c5bdb26cc5a67a99d73e1d15ef7952200d0b"
+  ],
+  [
+   "jurnal: unknown id",
+   "de492844e0ae007cb23687cdcd6f0a066738d48dc07259ac11158946175d8531"
+  ],
+  [
+   "api-process-output",
+   "3359ec9986e08c1f92d29a5b87f444c68216a8e759ae6c34c1f657584b43fd0e"
+  ],
+  [
+   "jurnal rows",
+   "18a8ed12e3f5bcc570c5672959a03f15a3a8a784dbb6f32151d97aeff088e89f"
   ]
  ]
 }

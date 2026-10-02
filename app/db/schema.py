@@ -28,7 +28,7 @@ JOBS_TABLE = "files"
 TEMPLATES_TABLE = "templates"
 
 #: Shu versiyagacha migratsiyalar qo'llangan bo'lishi SHART (`migrations/`).
-KERAKLI_VERSIYA = 1
+KERAKLI_VERSIYA = 2
 
 
 class SxemaXatosi(Exception):

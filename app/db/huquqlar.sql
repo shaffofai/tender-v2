@@ -57,6 +57,15 @@ GRANT USAGE ON SEQUENCE validation_evidence_id_seq TO {rol};
 GRANT SELECT, INSERT, UPDATE ON yuborish_navbati TO {rol};
 GRANT USAGE ON SEQUENCE yuborish_navbati_id_seq TO {rol};
 
+-- ── sorov_jurnali — so'rov jurnali, APPEND-ONLY (0002) ─────────────────────
+-- Yozish: app/jurnal.py (yozuvchi oqim; `--requeue` / `--qayta-och` amallari)
+-- O'qish: GET /jurnal (app/api/jurnal.py)
+-- UPDATE/DELETE BERILMAYDI (jobs_validation_log kabi, triggersiz): muddati
+-- o'tgan yozuvlarni faqat jadval EGASI o'chiradi — DEPLOY.md, 6-bo'lim.
+-- DIQQAT: bu fayl `format()` dan o'tadi — izohda ham jingalak qavs yozmang.
+GRANT SELECT, INSERT ON sorov_jurnali TO {rol};
+GRANT USAGE ON SEQUENCE sorov_jurnali_id_seq TO {rol};
+
 -- ── schema_migrations — faqat o'qish: xizmatlar ishga tushganda sxema
 --    versiyasini tekshiradi (`app/db/schema.tekshir`).
 GRANT SELECT ON schema_migrations TO {rol};
