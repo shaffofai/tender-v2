@@ -174,6 +174,8 @@ class _Qayd:
             return []
 
         jurnalmi = qisqa == "/jurnal" or qisqa.startswith("/jurnal/")
+        # `/dump` javobi — butun bazaning nusxasi: uning boshi ham saqlanmaydi.
+        tanasiz = jurnalmi or qisqa == "/dump"
         # Kalit TEKSHIRILGANMI. `/jurnal` da buni o'qish kodi o'zi belgilaydi
         # (`_ruxsat`); `/check` ishlovchisiga tegilmaydi, shuning uchun u
         # natijadan aniqlanadi: ishlovchi 401 dan boshqa javobni faqat
@@ -191,7 +193,7 @@ class _Qayd:
         qoshimcha = {"sorov_bayt": self.sorov.bayt, "javob_bayt": self.javob.bayt}
         if self.sorov.qirqildi:
             qoshimcha["sorov_qirqildi"] = True
-        if self.javob.qirqildi and not jurnalmi:
+        if self.javob.qirqildi and not tanasiz:
             qoshimcha["javob_qirqildi"] = True
         if self.istisno:
             qoshimcha["istisno"] = self.istisno      # TURI; xabari emas
@@ -210,7 +212,7 @@ class _Qayd:
             sorov_tanasi=self.sorov.saqlangan() or None,
             # `/jurnal` javobi — jurnalning o'zi: saqlansa har o'qish jurnalni
             # o'z nusxasi bilan shishirardi. Faqat hajmi (`javob_bayt`).
-            javob_tanasi=None if jurnalmi else (self.javob.saqlangan() or None),
+            javob_tanasi=None if tanasiz else (self.javob.saqlangan() or None),
             qoshimcha=qoshimcha)]
         if holat == 401:
             qatorlar.append(dict(

@@ -24,12 +24,15 @@ So'rov jurnali: har so'rov `sorov_jurnali` ga yoziladi (`JurnalOraliq` —
 ishlovchilarga tegmaydi); o'qish — GET /api-v2/tender-v2/jurnal, O'Z kalitlari
 bilan (app/api/jurnal.py).
 
+Bazaning to'liq nusxasi: GET /api-v2/tender-v2/dump — SQL fayl, O'Z kalitlari
+bilan (app/api/dump.py).
+
 Ishga tushirish:
     uvicorn api_server:app --host 0.0.0.0 --port 8000
 
 Sozlamalar (.env): KIRUVCHI_LOGIN, KIRUVCHI_PAROL, MAX_TOPLAM, DOCS_ENABLED,
-RUXSAT_HOSTLAR, FILE_BASE_URL, JURNAL_LOGIN, JURNAL_PAROL, JURNAL_YOQILGAN
-+ baza ulanishi (DATABASE_URL yoki DB_*).
+RUXSAT_HOSTLAR, FILE_BASE_URL, JURNAL_LOGIN, JURNAL_PAROL, JURNAL_YOQILGAN,
+DUMP_LOGIN, DUMP_PAROL + baza ulanishi (DATABASE_URL yoki DB_*).
 """
 
 import threading
@@ -42,6 +45,7 @@ from fastapi.responses import JSONResponse
 from app import config, jurnal
 from app.api import models
 from app.api.auth import KIRUVCHI_LOGIN, KIRUVCHI_PAROL, _auth_ok
+from app.api.dump import nusxa_javobi
 from app.api.intake import elementlarni_ajrat, elementni_tekshir
 from app.api.jurnal import JurnalOraliq, royxatni_ol, yozuvni_ol
 from app.api.store import ULANISH, _shablon_uygot, elementni_yoz
@@ -244,3 +248,18 @@ def jurnal_royxati(request: Request):
 @app.get("/jurnal/{jid}", include_in_schema=False)
 def jurnal_yozuvi(request: Request, jid: str):
     return yozuvni_ol(request, jid)
+
+
+# Bazaning TO'LIQ nusxasi — yuklab olinadigan SQL fayl, O'Z kalitlari bilan
+# (DUMP_LOGIN / DUMP_PAROL). Sinxron `def`: ulanish va katalog so'rovlari
+# threadpool'da; nusxa ALOHIDA ulanishda — `ULANISH.qulf` ga tegmaydi.
+@app.get("/api-v2/tender-v2/dump",
+         responses={200: {"content": {"application/sql": {}, "application/gzip": {}}},
+                    400: {"model": models.XatoJavob},
+                    401: {"model": models.XatoJavob},
+                    429: {"model": models.XatoJavob},
+                    500: {"model": models.XatoJavob},
+                    503: {"model": models.XatoJavob}})
+@app.get("/dump", include_in_schema=False)            # edge prefiksni kesgan yo'l
+def baza_nusxasi(request: Request):
+    return nusxa_javobi(request)

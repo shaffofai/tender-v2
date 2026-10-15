@@ -149,6 +149,28 @@ manzili (haqiqiy mijoz `sorov_sarlavhalari` dagi `x-forwarded-for` da, agar edge
 uni yuborsa); SIGKILL bo'lsa navbatdagi (≤ 1 s) yozuvlar yo'qoladi. Ilova roli
 jurnalni o'chira olmaydi — saqlash muddati `DEPLOY.md` §6 da.
 
+## Bazaning to'liq nusxasi
+
+`GET /api-v2/tender-v2/dump` (edge orqali `/dump`) — butun baza, filtrsiz,
+yuklab olinadigan SQL fayl: hamma jadvalning tuzilmasi (ketma-ketliklar,
+cheklovlar, indekslar, funksiya, trigger) va hamma qatori. Basic Auth, O'Z
+kalitlari `DUMP_LOGIN` / `DUMP_PAROL` (parol 24 belgidan qisqa yoki yo'q bo'lsa —
+503, ya'ni standart holatda yo'l yopiq). `?gzip=1` — `.sql.gz`.
+
+```bash
+curl -fu "$DUMP_LOGIN:$DUMP_PAROL" -o tender_v2.sql https://ai.shq.uz/api-v2/tender-v2/dump
+tail -1 tender_v2.sql                      # «-- NUSXA TO'LIQ: ...» bo'lishi SHART
+createdb tender_v2_nusxa && psql -X -v ON_ERROR_STOP=1 -d tender_v2_nusxa -f tender_v2.sql
+```
+
+Bitta snapshot (`REPEATABLE READ, READ ONLY`), alohida ulanishda — `/check`
+nusxa paytida ham ishlaydi; bir vaqtda bitta nusxa (ikkinchisi 429). Fayl
+`BEGIN`…`COMMIT` ichida: uzilgan yoki o'rtada xato bo'lgan fayl hech narsa
+tiklamaydi (xato bo'lsa oxirida `ROLLBACK` va `-- XATO`). Egalar va GRANT lar
+kiritilmaydi. Tender-v2 ishlatmaydigan obyekt (view, enum, kengaytma ...) bazada
+paydo bo'lsa nusxa 500 bilan rad etiladi — chala fayl berilmaydi. Javob tanasi
+so'rov jurnaliga yozilmaydi (faqat hajmi). Kod: `app/api/dump.py`.
+
 ## Testlar
 
 ```bash
@@ -164,6 +186,9 @@ ssenariyni yuritadi va natijani (HTTP javoblari, chiqish kodlari, har bosqichdan
 keyingi jadvallar, sxema va huquqlar, yuklab olishlar, yetkazilgan xabarlar)
 qayd etilgan holat bilan solishtiradi. Xulq ATAYLAB o'zgarsa:
 `E2E_YANGILA=1 pytest tests/e2e` va farqni commit'da tushuntiring.
+`E2E_ADMIN_URL` berilsa `tests/test_dump.py` ham haqiqiy bazada ishlaydi:
+nusxa (ilova roli bilan) → bo'sh bazaga tiklash → katalog va har jadval mazmuni
+solishtiriladi (`tender_v2_dump_*` bazalari, oxirida o'chiriladi).
 
 Korpus regressiyasi (`test_regressiya_korpus.py`, `test_nol_siyosati.py`)
 haqiqiy hujjatlar korpusini talab qiladi — u repozitoriyda YO'Q (maxfiy).

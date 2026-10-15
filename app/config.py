@@ -3,7 +3,7 @@
 
 Ilgari sozlamalar o'nlab joyda, modul yuklanayotganda `os.environ` dan
 o'qilardi. Endi bitta manba: har guruh (baza, worker, yuklab olish, shablon,
-API, yuboruvchi, jurnal) o'z funksiyasi orqali BIR MARTA o'qiladi va tekshiriladi.
+API, yuboruvchi, jurnal, dump) o'z funksiyasi orqali BIR MARTA o'qiladi va tekshiriladi.
 
 Guruhlar ATAYLAB alohida va dangasa (lazy): worker yuboruvchi sozlamasini
 o'qimaydi. Aks holda bitta `.env` dagi yuboruvchi xatosi (masalan man etilgan
@@ -64,7 +64,7 @@ def _matn(nom, standart=""):
 
 def tozala():
     """Keshlangan sozlamalarni tashlaydi (testlar muhitni o'zgartirgach)."""
-    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, migratsiya, jurnal):
+    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, migratsiya, jurnal, dump):
         f.cache_clear()
 
 
@@ -421,6 +421,24 @@ def jurnal():
         login=_matn("JURNAL_LOGIN"),
         parol=_matn("JURNAL_PAROL"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Bazaning to'liq nusxasi — GET /dump (faqat api o'qiydi)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Dump:
+    login: str
+    parol: str
+
+
+@functools.lru_cache(maxsize=None)
+def dump():
+    # O'z kalitlari — KIRUVCHI_* (sherik) va JURNAL_* dan ALOHIDA: nusxada
+    # hamma narsa bor (jurnal ham). Yo'q yoki parol qisqa bo'lsa — 503, ya'ni
+    # standart holatda yo'l YOPIQ.
+    return Dump(login=_matn("DUMP_LOGIN"), parol=_matn("DUMP_PAROL"))
 
 
 # ---------------------------------------------------------------------------
