@@ -35,7 +35,15 @@ from app.worker.gates import (
     _mazmun_nusxa_res,
     _ochilmadi_res,
 )
-from app.worker.queue import KUTISH_BELGI, shablon_kutilsin, texnik_qoyib_yubor
+from app.worker import pauza
+from app.worker.queue import (
+    KUTISH_BELGI,
+    pauza_tirilt,
+    pauza_uygot,
+    pauzada_qaytar,
+    shablon_kutilsin,
+    texnik_qoyib_yubor,
+)
 from app.worker.verdict import natijani_yoz
 from tender_engine import decision as _decision
 from tender_engine import evidence as _evidence
@@ -57,11 +65,12 @@ def _yukla(conn, ish, token, ish_papka):
     """
     uid = ish["uuid"]
     try:
-        return download(ish["link"], ish_papka)
+        yol = download(ish["link"], ish_papka)
     except PermanentDownloadError as exc:
         log(f"  [doimiy xato] {str(ish['link'])[:70]}: {exc}")
         _texnik_iz(conn, ish, str(exc))
-        texnik_qoyib_yubor(conn, uid, str(exc), doimiy=True, token=token)
+        if not _pauzada(conn, ish, token, str(exc)):
+            texnik_qoyib_yubor(conn, uid, str(exc), doimiy=True, token=token)
         return None
     except Exception as exc:
         # httpx.ReadTimeout kabi xatolarda str(exc) BO'SH bo'ladi —
@@ -70,8 +79,36 @@ def _yukla(conn, ish, token, ish_papka):
         xato = str(exc).strip() or type(exc).__name__
         log(f"  [texnik xato] {str(ish['link'])[:70]}: {xato}")
         _texnik_iz(conn, ish, xato)
-        texnik_qoyib_yubor(conn, uid, xato, token=token)
+        if not _pauzada(conn, ish, token, xato):
+            texnik_qoyib_yubor(conn, uid, xato, token=token)
         return None
+    if pauza.muvaffaqiyat():
+        n = pauza_uygot(conn)
+        if n:
+            log(f"[PAUZA tugadi] {n} ta qaytarilgan fayl navbatga qo'yildi")
+    return yol
+
+
+def _pauzada(conn, ish, token, xato):
+    """Yuklab olish xatosi PAUZA ostidami (`app/worker/pauza.py`)?
+
+    True — fayl jazosiz qaytarildi, odatdagi texnik yo'l (o'lim/urinish)
+    QO'LLANMAYDI. False — pauza yo'q, xato faylning o'ziniki.
+    """
+    holat = pauza.xato(ish["uuid"], ish.get("tender_id"))
+    if holat is None:
+        return False
+    if holat == "yangi":
+        oldingilar = [u for u in pauza.seriya_uuidlari() if u != str(ish["uuid"])]
+        n = pauza_tirilt(conn, oldingilar, f"manba nosoz — {xato}", pauza.QAYTISH_SONIYA)
+        log(f"[PAUZA] ketma-ket {len(oldingilar) + 1} ta yuklab olish xatosi, "
+            f"{pauza.tenderlar_soni()} ta tenderdan — fayllar emas, MANBA nosoz "
+            f"(saqlash tizimi / FILE_BASE_URL / tarmoq). Fayllar o'ldirilmaydi; "
+            f"{n} ta fayl o'limdan qaytarildi; manba har {pauza.SINOV_INTERVAL} s "
+            f"da bitta fayl bilan sinaladi. Oxirgi xato: {xato[:120]}", "error")
+    pauzada_qaytar(conn, ish["uuid"], f"manba nosoz — {xato}",
+                   pauza.QAYTISH_SONIYA, token=token)
+    return True
 
 
 def _etalonni_top(conn, ish, token, yuklangan):

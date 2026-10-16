@@ -12,7 +12,7 @@ from app.db.schema import JOBS_TABLE, SxemaXatosi, _yashamayotgan, _yuborilmagan
 from app.log import log
 from app.worker.audit import _siyosat_versiya
 from app.worker.gates import STATUS_IDENTICAL
-from app.worker.queue import STATUS_TEXNIK, kutayotganlar_soni
+from app.worker.queue import STATUS_TEXNIK, kutayotganlar_soni, pauzadagilar_soni
 
 
 def _yozish_huquqi(conn):
@@ -201,6 +201,13 @@ def health(conn=None, toliq=False):
             if kutayotgan:
                 satrlar.append(f"shablon kutmoqda: {kutayotgan} ta fayl "
                                f"(eng eskisi {eng_eski:%Y-%m-%d %H:%M})")
+            pauzada = pauzadagilar_soni(conn)
+            if pauzada:
+                # Tiriklikka ta'sir qilmaydi (navbat holati) — faqat ma'lumot.
+                satrlar.append(f"pauza       : {pauzada} ta fayl yuklab olish manbai "
+                               f"tiklanishini kutmoqda")
+                ogohlar.append(f"{pauzada} ta fayl PAUZA da — saqlash tizimi / "
+                               f"FILE_BASE_URL / tarmoqni tekshiring (worker logida [PAUZA])")
             satrlar.append(f"o'lik       : {olik}")
             if olik:
                 ogohlar.append(f"{olik} ta qator qayta ishlanmagan "

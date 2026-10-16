@@ -18,6 +18,7 @@ from app import templates as templates_db
 from app.db import DATABASE_URL, safe_dsn, schema
 from app.db.schema import JOBS_TABLE, SxemaXatosi
 from app.log import log
+from app.worker import pauza
 from app.worker.pipeline import ishni_bajar
 from app.worker.queue import (
     ish_ol,
@@ -153,4 +154,7 @@ def _sessiya(conn, once):
         if once:
             log("Bitta fayl ishlandi. To'xtatildi (--once).")
             return True
+        # PAUZA: manba nosoz — keyingi fayl (sinov) faqat intervaldan keyin.
+        if pauza.faolmi():
+            pauza.kut(lambda: _shutdown)
     return True

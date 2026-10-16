@@ -31,6 +31,8 @@ Nomlar serverdagi eski `~/tender_deploy` konteynerlari (`tender-postgres`,
 
 - Texnik nosozlik HECH QACHON `status = 2` (rad) bermaydi; urinishlar tugasa `4`
   (texnik, taslim — `--requeue` qaytaradi), tenderga `4` faqat 6 soatdan keyin ketadi.
+- Yuklab olish MANBAI yotsa (saqlash tizimi, `FILE_BASE_URL`, tarmoq) worker
+  PAUZA qiladi — fayllar o'lmaydi, `--requeue` kerak emas (README «Pauza»).
 - Verdikt va chiquvchi xabar bitta tranzaksiyada — biri yozilib, ikkinchisi
   yozilmay qolishi mumkin emas. Yetkazilgan deb FAQAT HTTP 200 sanaladi.
 - Ilova bazaga minimal huquqli `tender_ai` roli bilan ulanadi; jadvallar egasi
@@ -427,6 +429,8 @@ o'zgarganda, bir martadan yoziladi.
 | `[sozlama] JOBS_TABLE=... endi sozlanmaydi` | eski `.env` | o'zgaruvchini `.env` dan olib tashlang |
 | `etalon manbai YO'Q, lekin navbatda N ta fayl` | `templates` bo'sh | sherik shablonlarni yuborishi kerak |
 | fayllar `status = 0` da qolmoqda | texnik sabab (rad EMAS) | `python jobs_worker.py --dead-letters`, keyin `--requeue all` |
+| worker logida `[PAUZA] ketma-ket N ta yuklab olish xatosi` (audit bot xabar beradi) | saqlash tizimi yotgan / `FILE_BASE_URL` yoki `RUXSAT_HOSTLAR` noto'g'ri / tarmoq | manbani tuzating (sozlama bo'lsa — `.env`, keyin `sudo docker compose up -d worker`). Fayllar o'lmaydi: birinchi muvaffaqiyatli yuklab olish pauzani yopadi (`[PAUZA tugadi]`), `--requeue` KERAK EMAS |
+| sender logida `[TOSHQIN] N ta o'lik fayl` | 50 dan ortiq fayl birdan o'lgan (pauza ushlamagan sabab) | `--dead-letters` bilan sababini ko'ring; tuzatilsa `--requeue all`. Hech kim aralashmasa ham xabarlar `TEXNIK_TOSHQIN_MAKS_KUTISH` (6 soat) dan keyin ketadi; shablonsiz o'lganlar umuman ushlanmaydi |
 | 3/4 xabarlari `holat=3` (422) | sherik validatori `in:1,2` | kengaytirilgach `python yuboruvchi.py --qayta-och 3,4` |
 | disk to'ldi | etalon keshi | `python jobs_worker.py --kesh-tozala` yoki `ETALON_CACHE_MAX_MB` |
 | `/jurnal` → 503 `jurnalni o'qish sozlanmagan` | `JURNAL_LOGIN` / `JURNAL_PAROL` yo'q yoki parol 24 belgidan qisqa | §6 «So'rov jurnali» dagi uch qator |

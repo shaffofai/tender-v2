@@ -47,8 +47,9 @@ from app.sender.statuses import (
 )
 from app.sender.technical import (
     TEXNIK_TOSHQIN_CHEGARA,
+    TEXNIK_TOSHQIN_MAKS_KUTISH,
     TEXNIK_YUBORISH,
-    _texnik_nomzod_sharti,
+    toshqin_soni,
 )
 
 _S = config.yuboruvchi()
@@ -127,13 +128,16 @@ def health():
             if TEXNIK_YUBORISH:
                 try:
                     schema.tekshir(c)
+                    # Yuboruvchi sanaydigan AYNAN o'sha son (shablonsiz o'lganlar
+                    # va ushlab turish muddati o'tganlar kirmaydi — ular ketadi).
                     with c.cursor() as cur:
-                        cur.execute(f"SELECT count(*) {_texnik_nomzod_sharti()}")
-                        nomzod = int(cur.fetchone()[0] or 0)
+                        nomzod = toshqin_soni(cur)
                     if nomzod > TEXNIK_TOSHQIN_CHEGARA:
                         muammolar.append(
                             f"TOSHQIN: {nomzod} ta o'lik fayl kutmoqda "
-                            f"(chegara {TEXNIK_TOSHQIN_CHEGARA}) — texnik xabarlar to'xtagan")
+                            f"(chegara {TEXNIK_TOSHQIN_CHEGARA}) — ularning texnik "
+                            f"xabarlari {TEXNIK_TOSHQIN_MAKS_KUTISH // 3600} soatgacha "
+                            f"ushlab turilgan")
                 except SxemaXatosi as exc:
                     muammolar.append(f"sxema: {exc}")
     except Exception as exc:

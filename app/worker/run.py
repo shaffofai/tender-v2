@@ -39,7 +39,7 @@ from app import config, jurnal
 from app.db import DATABASE_URL, safe_dsn, schema
 from app.db.schema import JOBS_TABLE, _pk, _yashamayotgan, _yuborilmagan
 from app.log import _utf8_stdout, log
-from app.worker import loop
+from app.worker import loop, pauza
 from app.worker.gates import STATUS_IDENTICAL
 from app.worker.loop import POLL_INTERVAL, _etalon_manbaini_tekshir
 from app.worker.pipeline import ishni_bajar
@@ -291,6 +291,9 @@ def tekshirishni_boshla(chegara=None, davomiy=False, tasdiqsiz=False):
                     olik_belgilash(conn)
                 except (psycopg.OperationalError, psycopg.InterfaceError) as exc:
                     conn = _qayta_ulan(conn, exc)
+                # PAUZA: manba nosoz — keyingi fayl (sinov) faqat intervaldan keyin.
+                if pauza.faolmi():
+                    pauza.kut(lambda: loop._shutdown)
 
         except KeyboardInterrupt:
             print("\n\n  To'xtatildi (Ctrl+C). Ishlangan fayllar bazada saqlandi.")

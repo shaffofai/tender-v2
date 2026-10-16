@@ -32,7 +32,8 @@ app/                    xizmat qatlami — faylni olib keladi, verdiktni saqlayd
   jurnal.py             so'rov jurnali (`sorov_jurnali`): navbat + yozuvchi oqim
   templates.py          buyurtmachi shablonlari (`templates`) va etalon keshi
   db/                   qat'iy sxema, versiyalangan migratsiyalar, minimal huquqlar
-  worker/               navbat, darvozalar, audit, `ishni_bajar` quvuri, sikllar, CLI
+  worker/               navbat, darvozalar, audit, `ishni_bajar` quvuri, sikllar, CLI,
+                        pauza (ommaviy yuklab olish nosozligi)
   api/                  kiruvchi API (auth, yukni tekshirish, bazaga yozish, so'rov jurnali)
   sender/               chiquvchi yuboruvchi (status xaritasi, outbox, texnik xabarlar)
   tools/                operator vositalari: korish, kuzatuv, ishga_tushir
@@ -78,6 +79,27 @@ curl -u "$JURNAL_LOGIN:$JURNAL_PAROL" "http://127.0.0.1:8000/jurnal?tur=kirish&l
 `.env.example` → `.env`. Har sozlama `app/config.py` da BIR MARTA o'qiladi va
 tekshiriladi (noto'g'ri son — traceback emas, aniq xabar). Guruhlar dangasa:
 yuboruvchining xato sozlamasi worker'ni yiqitmaydi.
+
+## Pauza va toshqin to'xtatgichi (2026-10-16)
+
+**Pauza** (`app/worker/pauza.py`). Ketma-ket `PAUZA_KETMA_KET` (10) ta yuklab
+olish xatosi, orada bironta muvaffaqiyat yo'q, kamida `PAUZA_TENDERLAR` (3) ta
+turli tenderdan — bu fayllar emas, MANBA nosoz (saqlash tizimi, `FILE_BASE_URL`,
+`RUXSAT_HOSTLAR`, tarmoq). Worker shunda fayllarni o'ldirmaydi: seriyadagilar
+o'limdan qaytariladi (status 4 → 0, urinish qaytariladi), pauzadagi xato jazosiz,
+manba har `PAUZA_SINOV_INTERVAL` (60) soniyada bitta fayl bilan sinaladi.
+Birinchi muvaffaqiyatli yuklab olish pauzani yopadi va qaytarilgan fayllar darhol
+navbatga tushadi — `--requeue all` KERAK EMAS. Ochilishi `error` log satri
+(`[PAUZA] ...`, audit bot Telegram'ga yuboradi), yopilishi `[PAUZA tugadi]`;
+`--health --toliq` pauzadagi fayllar sonini ko'rsatadi. Holat jarayon xotirasida.
+
+**Toshqin to'xtatgichi** (H2, `app/sender/technical.py`). 50 dan ortiq fayl
+birdan o'lsa texnik xabarlari ushlab turiladi — endi MUDDATLI:
+`TEXNIK_TOSHQIN_MAKS_KUTISH` (6 soat) dan keyin baribir yuboriladi. Shablon
+kutib o'lganlar (`ETALON_KUTILMOQDA`) umuman ushlanmaydi: bu sherik shablon
+yubormagani, bizning nosozligimiz emas. Ilgari to'xtatgich abadiy edi
+(2026-10-03 — 06: 827 fayl). Shablon kutish chegarasi `ETALON_KUTISH_MAX_SOAT`
+— 18 soat (2026-10-16 gacha 72).
 
 ## Baza
 

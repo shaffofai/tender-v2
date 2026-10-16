@@ -16,6 +16,12 @@ TEXNIK_YUBORISH = _S.texnik_yuborish
 YUBORISH_TEXNIK_KECHIKISH = _S.yuborish_texnik_kechikish
 YUBORISH_TEXNIK_LEASE = _S.yuborish_texnik_lease
 TEXNIK_TOSHQIN_CHEGARA = _S.texnik_toshqin_chegara
+TEXNIK_TOSHQIN_MAKS_KUTISH = _S.texnik_toshqin_maks_kutish
+
+#: `app.worker.queue.KUTISH_BELGI` — «shablon kutib o'lgan» fayllarning
+#: `dead_reason` boshi. Import QILINMAYDI: worker moduli `config.worker()` ni
+#: o'qiydi, yuboruvchi esa worker sozlamasiga bog'lanmasligi kerak.
+SHABLON_OLIM_BELGI = "ETALON_KUTILMOQDA"
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +89,44 @@ def _texnik_nomzod_sharti():
     """
 
 
+def _ushlanadigan_shart():
+    """H2 USHLAB TURA OLADIGAN nomzodlar (2026-10-16) — `_texnik_nomzod_sharti` ga qo'shimcha.
+
+    Ilgari toshqin to'xtatgichi HAMMA nomzodni sanab, chegaradan oshsa
+    HECH NARSA yozmasdi — va bu ABADIY edi: o'lik fayllarni hech narsa
+    kamaytirmaydi, son o'z-o'zidan tushmaydi, keyin o'lgan boshqa
+    tenderlarning fayllari ham to'xtab qolardi (2026-10-03 — 06: 827 fayl,
+    qo'lda chegara ko'tarib chiqarildi). Endi ikki istisno:
+
+      • SHABLON kutib o'lganlar (`ETALON_KUTILMOQDA`) ushlanmaydi: ular
+        bizning nosozligimiz emas — sherik shablon yubormagan; `--requeue`
+        ham yordam bermaydi, matn («shablon mavjud emas») esa to'g'ri.
+        Shablon keyin kelsa fayl baribir tiriladi (N1).
+      • Ushlab turish MUDDATLI: kechikishdan keyin yana
+        `TEXNIK_TOSHQIN_MAKS_KUTISH` soniyadan eski o'lim ushlanmaydi —
+        odam aralashmasa ham xabar oxir-oqibat yetadi.
+
+    Soni hamon SONIGA qarab o'lchanadi (tezlikka emas) — faqat shu
+    nomzodlar orasida.
+
+    Naqsh PARAMETR (`%(shablon_olim)s`): literal `%` parametrli so'rovda
+    o'rinbosar deb o'qilardi. Chaqiruvchi `_USHLASH_PRM` ni beradi.
+    """
+    jami = int(YUBORISH_TEXNIK_KECHIKISH) + int(TEXNIK_TOSHQIN_MAKS_KUTISH)
+    return (f"s.dead_at >= now() - interval '{jami} seconds' "
+            f"AND coalesce(s.dead_reason, '') NOT LIKE %(shablon_olim)s")
+
+
+_USHLASH_PRM = {"shablon_olim": SHABLON_OLIM_BELGI + "%"}
+
+
+def toshqin_soni(cur):
+    """Toshqin to'xtatgichi sanaydigan son: ushlab turilishi MUMKIN bo'lgan nomzodlar."""
+    cur.execute(f"SELECT count(*) {_texnik_nomzod_sharti()} AND {_ushlanadigan_shart()}",
+                _USHLASH_PRM)
+    return int(cur.fetchone()[0] or 0)
+
+
 def texnik_xabarlarni_yig(conn):
     """O'lgan (taslim bo'lingan) fayllar uchun status=0 xabarini navbatga qo'yadi.
 
@@ -91,7 +135,8 @@ def texnik_xabarlarni_yig(conn):
     muammo» deb yuborardik. `attempts >= MAX_ATTEMPTS` ham yaramaydi — `ish_ol`
     claim paytida oshiradi, ayni paytda ishlanayotgan sog'lom faylda ham 5 turadi.
 
-    Qaytadi: (yozildi, nomzod_soni, toxtatildi).
+    Qaytadi: (yozildi, nomzod_soni, toxtatildi). `toxtatildi` — toshqin
+    to'xtatgichi shu aylanishda kimnidir ushlab qoldi.
     """
     if not TEXNIK_YUBORISH:
         return 0, 0, False
@@ -109,21 +154,25 @@ def texnik_xabarlarni_yig(conn):
     schema.tekshir(conn)
     shart = _texnik_nomzod_sharti()
     with conn.cursor() as cur:
-        # H2 — avval SANAYMIZ. Soni chegaradan oshsa hech narsa yozilmaydi:
-        # 50 dan ortiq fayl bir vaqtda o'lgan bo'lsa bu ishtirokchilar emas,
-        # TIZIM haqida xabar (saqlash tizimi / FILE_BASE_URL / tarmoq).
+        # H2 — avval SANAYMIZ. 50 dan ortiq fayl bir vaqtda o'lgan bo'lsa bu
+        # ishtirokchilar emas, TIZIM haqida xabar (saqlash tizimi /
+        # FILE_BASE_URL / tarmoq) — ular ushlab turiladi. Shablonsiz o'lganlar
+        # va ushlab turish muddati o'tganlar baribir yoziladi
+        # (`_ushlanadigan_shart`).
         cur.execute(f"SELECT count(*) {shart}")
         nomzod = int(cur.fetchone()[0] or 0)
-        if nomzod > TEXNIK_TOSHQIN_CHEGARA:
-            conn.rollback()
-            log(f"[TOSHQIN] {nomzod} ta o'lik fayl (chegara {TEXNIK_TOSHQIN_CHEGARA}) — "
-                f"texnik xabarlar YOZILMADI. Bu ommaviy nosozlik belgisi: saqlash "
-                f"tizimi / FILE_BASE_URL / tarmoqni tekshiring, keyin --requeue.",
-                "error")
-            return 0, nomzod, True
         if not nomzod:
             conn.rollback()
             return 0, 0, False
+        ushlanadigan = toshqin_soni(cur)
+        toshqin = ushlanadigan > TEXNIK_TOSHQIN_CHEGARA
+        if toshqin:
+            log(f"[TOSHQIN] {ushlanadigan} ta o'lik fayl (chegara {TEXNIK_TOSHQIN_CHEGARA}) — "
+                f"ularning texnik xabarlari {TEXNIK_TOSHQIN_MAKS_KUTISH // 3600} soatgacha "
+                f"USHLAB TURILADI, keyin baribir yuboriladi. Bu ommaviy nosozlik "
+                f"belgisi: saqlash tizimi / FILE_BASE_URL / tarmoqni tekshiring, "
+                f"keyin --requeue.", "error")
+            shart += f" AND NOT ({_ushlanadigan_shart()})"
         # H3 — yozish paytida shart QAYTA baholanadi: INSERT ... SELECT bitta
         # bayonot, ya'ni `dead_at` hamon o'rnida, `status` hamon 0 ekani AYNAN
         # yozilayotgan lahzada tekshiriladi. Sanash bilan yozish orasida
@@ -149,12 +198,12 @@ def texnik_xabarlarni_yig(conn):
             """, {"sh": MATN_SHABLON, "fy": MATN_FAYL, "um": MATN_UMUMIY,
                   "sh_naqsh": _like_naqshlar(_SHABLON_NAQSH),
                   "fy_naqsh": _like_naqshlar(_FAYL_NAQSH),
-                  "n": TEXNIK_TOSHQIN_CHEGARA})
+                  "n": TEXNIK_TOSHQIN_CHEGARA, **_USHLASH_PRM})
         yozildi = cur.rowcount
     conn.commit()
     if yozildi:
         log(f"[texnik] {yozildi} ta o'lik fayl uchun status={STATUS_TEXNIK} xabari navbatga qo'yildi")
-    return yozildi, nomzod, False
+    return yozildi, nomzod, toshqin
 
 
 _texnik_ogohlantirildi = False

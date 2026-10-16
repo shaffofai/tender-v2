@@ -249,7 +249,8 @@ def shablon_kelganini_tekshir(conn):
         # 2) N1 (2026-09-23): kutib O'LGAN fayllar ham tirilsin.
         #    `shablon_kutilsin` o'lik qilganda `dead_at = now()` VA
         #    `retry_after = NULL` qo'yadi — yuqoridagi shart esa aynan
-        #    ularning teskarisini talab qiladi. Natijada 72 soat kutib o'lgan
+        #    ularning teskarisini talab qiladi. Natijada chegaragacha
+        #    (ETALON_KUTISH_MAX_SOAT) kutib o'lgan
         #    fayl shablon kelganda ham ABADIY verdiktsiz qolardi. Faqat
         #    ETALON_KUTILMOQDA sababli o'lganlar tiriladi (boshqa o'liklar —
         #    tarmoq, buzuq fayl — bu yerga tegishli emas).
@@ -285,6 +286,105 @@ def shablon_kelganini_tekshir(conn):
     if n:
         log(f"[shablon keldi] {n} ta kutayotgan fayl navbatga qaytarildi")
     return n + tirildi
+
+
+PAUZA_BELGI = "PAUZA"
+
+
+def pauzada_qaytar(conn, uuid, sabab, kechikish, token=None):
+    """PAUZA: yuklab olish MANBA nosozligi sababli bo'lmadi — fayl JAZOSIZ qaytadi.
+
+    `shablon_kutilsin` bilan bir xil naqsh: urinish hisobi sarflanmaydi
+    (`ish_ol` oshirgan bittasi qaytariladi), fayl o'lmaydi, `last_error`
+    `PAUZA:` bilan boshlanadi — pauza yopilganda `pauza_uygot` shu belgi
+    bo'yicha uyg'otadi. `kechikish` — keyingi sinov shu faylni emas, BOSHQA
+    faylni olsin (bitta buzuq havola pauzani abadiy ushlab qolmasin).
+    """
+    fence = "AND (%(tok)s::text IS NULL OR claim_token = %(tok)s)"
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE jobs_state SET claimed_at = NULL, claim_token = NULL, "
+            "attempts = greatest(attempts - 1, 0), last_error = %(x)s, "
+            "retry_after = now() + interval '1 second' * %(i)s, updated_at = now() "
+            f"WHERE uuid = %(u)s AND dead_at IS NULL {fence}",
+            {"x": f"{PAUZA_BELGI}: {sabab}"[:2000], "u": uuid, "tok": token,
+             "i": kechikish})
+    conn.commit()
+
+
+def pauza_tirilt(conn, uuidlar, sabab, kechikish):
+    """PAUZA ochilgan zahoti: seriyadagi (pauzadan OLDIN xato bergan) fayllarni qaytaradi.
+
+    Ular xato paytida odatdagidek yo'lga tushgan: 404 / «Excel emas» —
+    darhol o'lik, `olik_belgilash` esa `files.status` ni 4 ga o'tkazgan;
+    vaqtinchalik xatolar urinish sarflagan. Endi ma'lum: aybdor fayl emas,
+    manba. `--requeue` ning shu fayllar uchun avtomatik nusxasi: avval
+    `files.status` 4 → 0 (`ish_ol` faqat 0 ni oladi), keyin `jobs_state` —
+    bitta tranzaksiyada. `dead_at` tozalangani uchun yuboruvchi ularga
+    texnik xabar yozmaydi (kechikish hali tugamagan). Verdikt olgan yoki
+    hozir boshqa jarayonda ishlanayotgan faylga tegilmaydi.
+    Qaytaradi: qaytarilganlar soni.
+    """
+    if not uuidlar:
+        return 0
+    lease = f"{LEASE_MINUTES} minutes"
+    royxat = sorted({str(u) for u in uuidlar})
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            UPDATE {JOBS_TABLE} j
+            SET status = 0, updated_at = now()
+            FROM jobs_state s
+            WHERE {_kalit_join('j', 's')}
+              AND s.uuid = ANY(%s)
+              AND s.dead_at IS NOT NULL
+              AND j.status = %s
+              AND {_yuborilmagan('j')}{_yashamayotgan('j')}
+            """, (royxat, STATUS_TEXNIK))
+        cur.execute(
+            f"""
+            UPDATE jobs_state s
+            SET dead_at = NULL, dead_reason = NULL,
+                claimed_at = NULL, claim_token = NULL,
+                attempts = greatest(s.attempts - 1, 0),
+                last_error = %s,
+                retry_after = now() + interval '1 second' * %s,
+                updated_at = now()
+            FROM {JOBS_TABLE} j
+            WHERE {_kalit_join('j', 's')}
+              AND s.uuid = ANY(%s)
+              AND j.status = 0
+              AND (s.claimed_at IS NULL OR s.claimed_at < now() - interval '{lease}')
+            """, (f"{PAUZA_BELGI}: {sabab}"[:2000], kechikish, royxat))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
+def pauza_uygot(conn):
+    """Pauza yopildi (manba tiklandi): pauzada qaytarilgan fayllar DARHOL navbatga.
+
+    Busiz ular `pauzada_qaytar` qo'ygan `retry_after` tugashini kutardi.
+    Faqat `jobs_state` ga yoziladi. Qaytaradi: uyg'otilganlar soni.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE jobs_state SET retry_after = now(), updated_at = now() "
+            "WHERE dead_at IS NULL AND last_error LIKE %s "
+            "AND retry_after IS NOT NULL AND retry_after > now()",
+            (PAUZA_BELGI + ":%",))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
+def pauzadagilar_soni(conn):
+    """Pauzada qaytarilib, hali qayta ishlanmagan fayllar soni. Faqat o'qiydi."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM jobs_state WHERE dead_at IS NULL AND last_error LIKE %s",
+            (PAUZA_BELGI + ":%",))
+        return int(cur.fetchone()[0] or 0)
 
 
 def kutayotganlar_soni(conn):
@@ -324,7 +424,7 @@ def olik_belgilash(conn):
         qatorlar = cur.fetchall()
         # `files.status = 4` (texnik, taslim) — YAGONA qo'yiladigan joy.
         # `dead_at` uch yo'ldan qo'yiladi (texnik_qoyib_yubor doimiy=True,
-        # shablon_kutilsin 72 soat, yuqoridagi urinishlar), uchalasini shu
+        # shablon_kutilsin ETALON_KUTISH_MAX_SOAT, yuqoridagi urinishlar), uchalasini shu
         # supurgi bitta shart bilan tutadi: o'lik VA hali 0. Oradagi kechikish
         # eng ko'pi POLL_INTERVAL (5 s) — yuboruvchining 6 soatlik kechikishi
         # oldida sezilmaydi. Verdikt olgan (1/2/3) qatorga tegilmaydi.

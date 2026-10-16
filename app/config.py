@@ -136,6 +136,9 @@ class Worker:
     etalon_kutish_interval: int
     etalon_kutish_max_soat: int
     discovery_interval: int
+    pauza_ketma_ket: int
+    pauza_tenderlar: int
+    pauza_sinov_interval: int
 
 
 @functools.lru_cache(maxsize=None)
@@ -159,9 +162,21 @@ def worker():
         # `shablon_kelganini_tekshir` uni uyg'otadi. Chegara: shuncha soat
         # kutilsa — o'lik ro'yxatiga (odam ko'rsin), status baribir 0 qoladi.
         etalon_kutish_interval=_son("ETALON_KUTISH_INTERVAL", "600"),   # soniya
-        etalon_kutish_max_soat=_son("ETALON_KUTISH_MAX_SOAT", "72"),
+        # 2026-10-16 (buyurtmachi qarori): 72 → 18. Shablon kelmagan fayl
+        # endi 18 soatdan keyin «shablon yo'q» xabarini oladi; shablon
+        # keyinroq kelsa ham fayl tiriladi va haqiqiy verdikt ketadi (N1).
+        etalon_kutish_max_soat=_son("ETALON_KUTISH_MAX_SOAT", "18"),
         # To'liq kashfiyot skani shuncha soniyada bir marta (`kashf_qil`).
         discovery_interval=_son("DISCOVERY_INTERVAL", "300"),
+        # PAUZA (2026-10-16, `app/worker/pauza.py`): ketma-ket shuncha
+        # yuklab olish xatosi (orada bironta muvaffaqiyat yo'q), kamida
+        # shuncha turli tenderdan — fayllar emas, MANBA nosoz (saqlash
+        # tizimi, FILE_BASE_URL, tarmoq). Worker fayllarni o'ldirmaydi va
+        # manbani sinov intervalida bitta fayl bilan tekshiradi.
+        # PAUZA_KETMA_KET=0 — pauza o'chiq (eski xulq).
+        pauza_ketma_ket=_son("PAUZA_KETMA_KET", "10"),
+        pauza_tenderlar=_son("PAUZA_TENDERLAR", "3"),
+        pauza_sinov_interval=_son("PAUZA_SINOV_INTERVAL", "60"),   # soniya
     )
 
 
@@ -316,6 +331,7 @@ class Yuboruvchi:
     yuborish_texnik_kechikish: int
     yuborish_texnik_lease: int
     texnik_toshqin_chegara: int
+    texnik_toshqin_maks_kutish: int
     tender_qabul_statuslar: str
     tender_status_xarita: str
 
@@ -367,6 +383,14 @@ def yuboruvchi():
         # H2 — toshqin to'xtatgichi. SONIGA qaraydi, tezligiga emas: tezlikka
         # qaragan to'xtatgich toshqinni to'xtatmaydi, faqat kechiktiradi.
         texnik_toshqin_chegara=_son("TEXNIK_TOSHQIN_CHEGARA", "50"),
+        # H2 ushlab turishining CHEGARASI (2026-10-16). Ilgari toshqin
+        # ABADIY to'xtatardi: o'lik fayllarni hech narsa kamaytirmaydi, ya'ni
+        # 50 dan oshgan son o'z-o'zidan hech qachon tushmasdi va BARCHA
+        # texnik xabarlar (boshqa tenderlarniki ham) to'xtardi — 2026-10-03
+        # dan 06 gacha 827 fayl shunday turdi. Endi yangi o'lgan fayl
+        # kechikishdan keyin yana ko'pi bilan shuncha soniya ushlanadi,
+        # keyin baribir yuboriladi. 0 — ushlab turmaydi.
+        texnik_toshqin_maks_kutish=_son("TEXNIK_TOSHQIN_MAKS_KUTISH", "21600"),
         # Xom qiymatlar — tahlili va OLTIN QOIDA tekshiruvi `app/sender/statuses.py` da.
         tender_qabul_statuslar=os.environ.get("TENDER_QABUL_STATUSLAR", "1,2"),
         tender_status_xarita=os.environ.get("TENDER_STATUS_XARITA", "3:2"),
