@@ -20,8 +20,8 @@
 # bilan to'qnashmaydi — o'tish paytida ikkalasi yonma-yon tura oladi.
 #
 # Portlar: faqat baza — standart 127.0.0.1:5433 (hostdagi o'z postgres 5432
-# ni band qilgan bo'lishi mumkin). DB_PUBLISH_BIND ga HECH QACHON 0.0.0.0
-# qo'ymang. API porti o'tish davrida (router/edge hali 192.168.100.60:8084
+# ni band qilgan bo'lishi mumkin), `db-publish` tarmog'i orqali. DB_PUBLISH_BIND
+# ga HECH QACHON 0.0.0.0 qo'ymang. API porti o'tish davrida (router/edge hali 192.168.100.60:8084
 # ni kutsa) — docker-compose.edge.yml.
 #
 # ⚠️ HECH QACHON `docker compose down -v` — bazaning volume'i o'chadi.
@@ -60,7 +60,7 @@ services:
       TZ: Asia/Tashkent
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks: [internal]
+    networks: [internal, db-publish]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -179,9 +179,17 @@ services:
     stop_grace_period: 60s
 
 networks:
-  # Baza faqat shu tarmoqda — undan tashqariga yo'l yo'q.
+  # Ilova ↔ baza shu tarmoqda — undan tashqariga yo'l yo'q.
   internal:
     internal: true
+  # FAQAT baza portini hostga chiqarish uchun: `internal` tarmoqda Docker
+  # `ports:` ni e'tiborsiz qoldiradi. NAT o'chiq — baza bu tarmoq orqali
+  # internetga chiqa olmaydi; unda bazadan boshqa konteyner yo'q.
+  db-publish:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.bridge.enable_icc: "false"
   # Worker (fayllarni yuklash) va yuboruvchi (tender API) uchun internet.
   egress: {}
   # Platforma tarmog'i (gateway stack yaratadi): router API ni `tender-v2:8000`

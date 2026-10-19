@@ -655,7 +655,9 @@ def test_compose_postgres_sozlamasi():
       • sxema migratsiya bilan yaratiladi (`migrate` xizmati), ilova esa u
         muvaffaqiyatli tugagandan KEYIN ishga tushadi;
       • migratsiya baza SOG'LOM bo'lgandan keyin yuradi;
-      • bazaning porti tashqariga OCHILMAYDI (faqat ichki tarmoq).
+      • bazaning porti faqat hostda (standart 127.0.0.1, HECH QACHON 0.0.0.0) —
+        alohida `db-publish` tarmog'i orqali, unda NAT o'chiq (internetga
+        chiqmaydi); baza `egress`/platforma tarmog'ida EMAS.
     """
     matn = open(os.path.join(ILDIZ, "docker-compose.yml"), encoding="utf-8").read()
     assert "image: postgres" in matn, "compose da o'z bazamiz yo'q"
@@ -666,8 +668,15 @@ def test_compose_postgres_sozlamasi():
         "ilova migratsiya tugashini kutmaydi"
     assert "condition: service_healthy" in matn, "migratsiya baza tayyor bo'lishini kutmaydi"
     blok = matn.split("\n  db:\n", 1)[1].split("\n  migrate:", 1)[0]
-    assert "ports:" not in blok, "baza porti tashqariga ochilgan"
+    portlar = [s.strip() for s in blok.splitlines() if s.strip().startswith("- \"") and ":5432" in s]
+    assert portlar == ['- "${DB_PUBLISH_BIND:-127.0.0.1}:${DB_PUBLISH_PORT:-5433}:5432"'], \
+        f"baza porti faqat DB_PUBLISH_BIND (standart 127.0.0.1) da bo'lsin: {portlar}"
+    assert "networks: [internal, db-publish]" in blok, "baza tarmoqlari o'zgargan (egress? platforma?)"
     assert "internal: true" in matn, "baza ichki tarmoqda emas"
+    tarmoq = matn.split("\n  db-publish:\n", 1)[1].split("\n  egress:", 1)[0]
+    assert 'enable_ip_masquerade: "false"' in tarmoq, "db-publish tarmog'ida NAT yoqiq — baza internetga chiqadi"
+    env = open(os.path.join(ILDIZ, ".env.example"), encoding="utf-8").read()
+    assert "\nDB_PUBLISH_BIND=127.0.0.1\n" in env, ".env.example da DB_PUBLISH_BIND 127.0.0.1 emas"
 
 
 def test_compose_da_qotirilgan_parol_yoq():

@@ -18,7 +18,7 @@ Compose loyihasi `shaffofai-v2-tender-v2`, beshta xizmat:
 
 | Xizmat | Konteyner | Vazifa |
 |---|---|---|
-| `db` | `shaffofai-v2-tender-v2-db` | PostgreSQL 17 — tender-v2 ning **o'z** bazasi. Faqat ichki tarmoqda, porti ochilmaydi |
+| `db` | `shaffofai-v2-tender-v2-db` | PostgreSQL 17 — tender-v2 ning **o'z** bazasi. Ilova bilan ichki tarmoqda; porti faqat hostda — `127.0.0.1:5433` (`db-publish` tarmog'i, NAT o'chiq) |
 | `migrate` | `shaffofai-v2-tender-v2-migrate` | Bir martalik: sxema migratsiyalari, ilova roli va huquqlari. Har `up` da idempotent yuradi |
 | `api` | `shaffofai-v2-tender-v2-api` | Kiruvchi API (Basic Auth). Platforma tarmog'ida `tender-v2:8000` |
 | `worker` | `shaffofai-v2-tender-v2-worker` | Tekshiruv: yuklab olish, shablon, verdikt |
@@ -445,7 +445,9 @@ o'zgarganda, bir martadan yoziladi.
 ## 8. Xavfsizlik
 
 1. `.env` — `chmod 600`, git ga ham, rasmga ham tushmaydi. Parollar faqat harf/raqam.
-2. Baza porti ochilmaydi; API porti faqat `EDGE_BIND` da (HECH QACHON `0.0.0.0`).
+2. Baza porti faqat `DB_PUBLISH_BIND:DB_PUBLISH_PORT` da (standart `127.0.0.1:5433`) — tashqaridan
+   faqat SSH tunnel: `ssh -p 2222 -L 5433:127.0.0.1:5433 debian@SERVER`. API porti faqat
+   `EDGE_BIND` da. Ikkalasida ham HECH QACHON `0.0.0.0`.
 3. `/docs`, `/redoc`, `/openapi.json` yopiq (`DOCS_ENABLED=0`).
 4. Ilova konteynerlarida jadvallar egasining paroli yo'q (`POSTGRES_PASSWORD: ""`).
 5. Kiruvchi Basic Auth — TLS ortida (kompaniya edge'i); parol base64, shifr emas.
