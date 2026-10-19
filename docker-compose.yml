@@ -5,7 +5,7 @@
 #     docker compose pull && docker compose up -d      # CI chiqargan rasm
 #     docker compose up -d --build                     # yoki shu yerda qurish
 #
-#   db       PostgreSQL 17 — faqat ichki tarmoqda, porti tashqariga OCHILMAYDI
+#   db       PostgreSQL 17 — porti faqat hostda: DB_PUBLISH_BIND:DB_PUBLISH_PORT
 #   migrate  bir martalik: sxema migratsiyalari + ilova roli va huquqlari
 #   api      kiruvchi API (tender tizimi → biz); platforma tarmog'ida «tender-v2»
 #   worker   tekshiruv (python main.py --davomiy -y)
@@ -19,8 +19,10 @@
 # konteynerlari (tender-postgres, tender-ai, tender-api, tender-yuboruvchi)
 # bilan to'qnashmaydi — o'tish paytida ikkalasi yonma-yon tura oladi.
 #
-# Portlar: bu faylda HECH QAYSI port tashqariga ochilmaydi. O'tish davrida
-# (router/edge hali 192.168.100.60:8084 ni kutsa) — docker-compose.edge.yml.
+# Portlar: faqat baza — standart 127.0.0.1:5433 (hostdagi o'z postgres 5432
+# ni band qilgan bo'lishi mumkin). DB_PUBLISH_BIND ga HECH QACHON 0.0.0.0
+# qo'ymang. API porti o'tish davrida (router/edge hali 192.168.100.60:8084
+# ni kutsa) — docker-compose.edge.yml.
 #
 # ⚠️ HECH QACHON `docker compose down -v` — bazaning volume'i o'chadi.
 # ============================================================================
@@ -48,6 +50,8 @@ services:
   db:
     image: postgres:17
     container_name: shaffofai-v2-tender-v2-db
+    ports:
+      - "${DB_PUBLISH_BIND:-127.0.0.1}:${DB_PUBLISH_PORT:-5433}:5432"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tender_v2}
