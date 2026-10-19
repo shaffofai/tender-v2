@@ -541,9 +541,14 @@ class _LogUlagich(logging.Handler):
             vaqt = datetime.datetime.fromtimestamp(record.created, datetime.timezone.utc)
             daraja = ("error" if record.levelno >= logging.ERROR else
                       "warning" if record.levelno >= logging.WARNING else "info")
-            qoy({"yaratildi": vaqt, "tur": "log", "hodisa": "log", "daraja": daraja,
-                 "manba": _HOLAT["manba"], "sorov_id": sorov["id"] if sorov else None,
-                 "xabar": record.getMessage()})
+            qator = {"yaratildi": vaqt, "tur": "log",
+                     "hodisa": getattr(record, "hodisa", None) or "log", "daraja": daraja,
+                     "manba": _HOLAT["manba"], "sorov_id": sorov["id"] if sorov else None,
+                     "xabar": record.getMessage()}
+            qoshimcha = getattr(record, "qoshimcha", None)
+            if qoshimcha is not None:
+                qator["qoshimcha"] = qoshimcha
+            qoy(qator)
         except Exception:
             pass
 

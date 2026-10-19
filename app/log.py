@@ -61,7 +61,18 @@ def setup_logging(nom="tender"):
     return lg
 
 
-def log(msg, level="info"):
-    """Loyihaning barcha joyida ishlatiladigan sodda log funksiyasi."""
+def log(msg, level="info", hodisa=None, qoshimcha=None):
+    """Loyihaning barcha joyida ishlatiladigan sodda log funksiyasi.
+
+    `hodisa` / `qoshimcha` — ixtiyoriy: LogRecord'ga `extra` bo'lib
+    qo'shiladi; bazaga yozuvchi ulagich satrni `hodisa='log'` o'rniga shu nom
+    va tuzilgan ma'lumot bilan saqlaydi (masalan audit bot alohida xabar
+    qiladigan `shablon_topilmadi`).
+    """
     lg = setup_logging()
-    getattr(lg, level, lg.info)(msg)
+    extra = {}
+    if hodisa:
+        extra["hodisa"] = hodisa
+    if qoshimcha is not None:
+        extra["qoshimcha"] = qoshimcha
+    getattr(lg, level, lg.info)(msg, extra=extra or None)

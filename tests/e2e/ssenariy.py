@@ -831,6 +831,18 @@ def scenario(prof):  # noqa: C901 — ssenariy ATAYLAB bitta ro'yxat
     # Every process has exited by now: each one flushed its rows on the way out.
     jurnal_snapshot("jurnal rows")
 
+    # ── 12. «shablon yo'q» (2026-10-19) — audit bot o'qiydigan tuzilgan satrlar ──
+    # Appended last for the same reason as step 11. 71, 72 (tender 1007, form
+    # sent later) and 99 (tender 1001 excel3, never) — 99 twice: `--requeue all`.
+    with psycopg.connect(ADMIN_URL, autocommit=True) as c:
+        rows = c.execute(
+            "SELECT daraja, manba, qoshimcha->>'tender_id', qoshimcha->>'type', "
+            "qoshimcha->>'file_id', qoshimcha->>'foydalanuvchi', qoshimcha->>'izoh' "
+            "FROM sorov_jurnali WHERE hodisa = 'shablon_topilmadi' "
+            "ORDER BY 3, 4, 5").fetchall()
+    step("jurnal: shablon_topilmadi rows", kind="db",
+         tables={"sorov_jurnali": [list(r) for r in rows]})
+
 
 def yurgiz(admin_url, saqla=False):
     """Ssenariyni yurgizadi. Qaytadi: {"steps": [...], "setup": [...], "seconds": N}."""

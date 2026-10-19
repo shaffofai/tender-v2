@@ -223,7 +223,7 @@
   ],
   [
    "db after worker pass 1",
-   "92094ac8044486a2c800321dfb645ef6e71dba4f6a52cf42da9b30a9e261d874"
+   "499952e6514043dc5ff1a846e35fd30eab01c01e8b0335b40c7dde997c0c0e31"
   ],
   [
    "worker --health --toliq (backlog)",
@@ -235,7 +235,7 @@
   ],
   [
    "db after discovery",
-   "cea3f1e3cdfd42b5dd40b51184340e9161f0dde7dbf9e711d3aad8dbafe66a7a"
+   "5b9e91122ec33de774d0a361530515dfa0b5654c0a5acaae8a890fabd04911ab"
   ],
   [
    "late template for 1007",
@@ -259,7 +259,7 @@
   ],
   [
    "db after wave 2",
-   "b699ee5ee7288046f65b2b428818cc3e38f419b2a4acd9595c4059f1f82a013b"
+   "9a6a63ecabda24cf6db94f949cecf269758ba3bd67f8323732a7f7d775436d65"
   ],
   [
    "worker --once (wave 2)",
@@ -271,7 +271,7 @@
   ],
   [
    "db after worker pass 2",
-   "9d39f4eb7f1c9cb630d54c52a3b984c8f919e811acea1ade9c2623160a7dc724"
+   "a2aa2760aee1347b591ed58999b69b58a148c2e843595e3e3003d365e851a22e"
   ],
   [
    "sender --holat (before)",
@@ -283,15 +283,15 @@
   ],
   [
    "sender cycle 1 (strict)",
-   "6528fcb83237f4baa01f039e6815f27e781c9cf1c58c181a05d090b6b98d2c9d"
+   "c428fb31541f78f100ed9f7f0c50b9467aadfa428335a031df9dc6adaadf59d2"
   ],
   [
    "sender cycle 2 (strict)",
-   "fd3bbe998ea5f0c9e2b597364c7c1324c283bcf2b785225527bfffd4af2dc47d"
+   "798550dbbfcfa51daadafd629448a16e00687cb5fc870fcc8eb959fb64e15bd1"
   ],
   [
    "sender cycle 3 (strict)",
-   "a4fb922888737b0e7c5791c2670daac1996e253118fd834457d542377b4d5da8"
+   "4b22e099048ded7aaa9bf5073d0788f305dbfc9d9a528a4093ace96478af433a"
   ],
   [
    "sender cycle 4 (strict)",
@@ -299,11 +299,11 @@
   ],
   [
    "db after strict delivery",
-   "3413c4a65d57998c6b75cbb7fd114344cfd327032deb6bfa1ebc5cc3bee8d14c"
+   "0b2f0500eb1d499cd942170584dc0b3b63d82b517c72788a09cdaa22eca82722"
   ],
   [
    "sender --health (strict)",
-   "a8def34172723b474cf0bbeadc326c144763f5ae190b0374e4b2d2f154073f3c"
+   "23493eaa55f178d17972e4c9033f07858a2dfbb0aab8ce5e9edceda805ad3eb4"
   ],
   [
    "sender --qayta-och 3",
@@ -319,7 +319,7 @@
   ],
   [
    "sender cycle 6",
-   "a661c58ec4474da82e62a5c0a4dd23bccc702488d0960eecdda6a74547cf3a60"
+   "4265bfdfd308d52b6f918b991d92bd8c3bdb52b92f64389d98530987e42c6fc9"
   ],
   [
    "sender cycle 7",
@@ -335,7 +335,7 @@
   ],
   [
    "db after delivery",
-   "6c4fa3ea404b9f3645f0e7aeee2124198b7bdc2287b78053abd1e0a8b59b2cf0"
+   "40dd7a8ed9a9dd6bc70c548d4242540f1fbf34f076365bb624292fc8462040f2"
   ],
   [
    "worker --dead-letters",
@@ -443,7 +443,7 @@
   ],
   [
    "db after operator tools",
-   "6c4fa3ea404b9f3645f0e7aeee2124198b7bdc2287b78053abd1e0a8b59b2cf0"
+   "40dd7a8ed9a9dd6bc70c548d4242540f1fbf34f076365bb624292fc8462040f2"
   ],
   [
    "worker --shablonlarni-tayyorla",
@@ -459,7 +459,7 @@
   ],
   [
    "db after single requeue",
-   "131241774fcb52bd98d0ee1c66fd8390bb48a755753425b022065f03d85c1a9d"
+   "7b4a2baeeee736e398c6ff77347b5a72578b336f75149b599bb53180b879c7d2"
   ],
   [
    "main -y (after requeue)",
@@ -471,7 +471,7 @@
   ],
   [
    "db after requeue all",
-   "8d6b34a32564721f57c9de7ea6efa36a832a3adc005a360ab3c8708fbc08dcbf"
+   "10300e421a93e0d7e3003cb11a9897633065a6acca67c23c125f8f61e65f2c32"
   ],
   [
    "main -y (after requeue all)",
@@ -487,7 +487,7 @@
   ],
   [
    "db final",
-   "a029426dce0dd455af91056227a2555aa7f7d6380af4df94ee7ea543ef4c6f00"
+   "5d08707f298926c2656716c56efaae374d5f3a6464565b75b973e849e4edf7c8"
   ],
   [
    "main --davomiy (SIGTERM)",
@@ -503,11 +503,11 @@
   ],
   [
    "db after SIGTERM runs",
-   "a029426dce0dd455af91056227a2555aa7f7d6380af4df94ee7ea543ef4c6f00"
+   "5d08707f298926c2656716c56efaae374d5f3a6464565b75b973e849e4edf7c8"
   ],
   [
    "tender platform received",
-   "007f965476a36b7758257859b61df8dad31885ad3c79cba253628b663a3db4c2"
+   "9043658b4fb60b8334dd9504b5259d8d703244a500c0415b6e41323b8a2bd9ce"
   ],
   [
    "jurnal: unconfigured",
@@ -544,6 +544,10 @@
   [
    "jurnal rows",
    "18a8ed12e3f5bcc570c5672959a03f15a3a8a784dbb6f32151d97aeff088e89f"
+  ],
+  [
+   "jurnal: shablon_topilmadi rows",
+   "0dce3cb673ecd6cd63fdd0e8c2da02b35d36a9982a11631dccfca6722a2b1069"
   ]
  ]
 }

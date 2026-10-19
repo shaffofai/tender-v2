@@ -134,8 +134,8 @@ def _sessiya(conn, once):
             # Navbat bo'shadi — to'liq skan qilib ko'ramiz (qaytarilgan
             # qatorlar bo'lishi mumkin), keyin kutamiz.
             kashf_qil(conn, toliq=True)
-            # F1: shablon kelgan bo'lsa kutayotgan fayl darhol ishga tushsin
-            # (aks holda ETALON_KUTISH_INTERVAL tugashini kutardi).
+            # F1/N1: shablon kelgan bo'lsa «shablon yo'q» fayllar qayta
+            # tekshiruvga qaytsin (API ham shablon kelganda shuni chaqiradi).
             shablon_kelganini_tekshir(conn)
             time.sleep(POLL_INTERVAL)
             continue

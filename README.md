@@ -19,7 +19,7 @@ tender tizimi ──POST /api-v2/tender-v2/check──► api ──► files / 
 | `1` | hujjat to'g'ri to'ldirilgan |
 | `2` | kamchilik — sababi `comment` da (o'zbekcha) |
 | `3` | buyurtmachi shabloni bilan AYNAN bir xil (sha256) |
-| `4` | texnik, taslim — tekshirib bo'lmadi. **Rad EMAS** (`--requeue` qaytaradi) |
+| `4` | texnik, taslim — tekshirib bo'lmadi, yoki buyurtmachi fayli yo'q (izoh: «Ushbu lot uchun buyurtmachi fayllari topilmadi.»). **Rad EMAS** |
 
 **OLTIN QOIDA:** texnik xato (tarmoq, shablon yo'q, fayl ochilmadi) HECH QACHON `2` bermaydi.
 
@@ -96,10 +96,22 @@ navbatga tushadi — `--requeue all` KERAK EMAS. Ochilishi `error` log satri
 **Toshqin to'xtatgichi** (H2, `app/sender/technical.py`). 50 dan ortiq fayl
 birdan o'lsa texnik xabarlari ushlab turiladi — endi MUDDATLI:
 `TEXNIK_TOSHQIN_MAKS_KUTISH` (6 soat) dan keyin baribir yuboriladi. Shablon
-kutib o'lganlar (`ETALON_KUTILMOQDA`) umuman ushlanmaydi: bu sherik shablon
-yubormagani, bizning nosozligimiz emas. Ilgari to'xtatgich abadiy edi
-(2026-10-03 — 06: 827 fayl). Shablon kutish chegarasi `ETALON_KUTISH_MAX_SOAT`
-— 18 soat (2026-10-16 gacha 72).
+yo'qligi sababli o'lganlar (`ETALON_KUTILMOQDA`) umuman ushlanmaydi: bu sherik
+shablon yubormagani, bizning nosozligimiz emas. Ilgari to'xtatgich abadiy edi
+(2026-10-03 — 06: 827 fayl).
+
+## Shablon yo'q — kutilmaydi (2026-10-19)
+
+Ishtirokchi fayli kelganda shu `tender_id` + `type` uchun buyurtmachi fayli
+(`templates`) bo'lmasa fayl KUTMAYDI (ilgari 72, keyin 18 soat kutardi): darhol
+`status = 4`, `comment` = «Ushbu lot uchun buyurtmachi fayllari topilmadi.» va
+shu xabar tenderga kechikishsiz ketadi (`verdict.shablon_topilmadi_yoz`, bitta
+tranzaksiya). Jurnalga `hodisa = shablon_topilmadi` satri tushadi (`qoshimcha`:
+tender_id, type, file_id, havoladagi yuklagan foydalanuvchi raqami, havola) —
+audit bot uni har fayl uchun Telegram'ga yuboradi. Shablon keyin kelsa fayl
+tiriladi (status 4 → 0, izoh tozalanadi) va haqiqiy verdikt ikkinchi xabar
+bo'lib ketadi. `ETALON_KUTISH_INTERVAL` / `ETALON_KUTISH_MAX_SOAT` endi
+ishlatilmaydi.
 
 ## Baza
 

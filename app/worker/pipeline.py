@@ -4,7 +4,7 @@
 Qadamlar TARTIBI tekshiruv mantig'ining o'zi (har qadam izohida sababi bor):
 
     1)  yuklab olish                                   `_yukla`
-    2)  etalon: `templates` dan; yo'q bo'lsa kutish (F1), noma'lum tur (F3)
+    2)  etalon: `templates` dan; yo'q bo'lsa darhol status 4 (2026-10-19), noma'lum tur (F3)
         yoki texnik holat                              `_etalonni_top`
     Q1) bayt-ba-bayt aynan nusxa → status 3           (hamma qoidadan OLDIN)
     3)  o'qish: ochilmadi → QABUL (#2); mazmun-nusxa (S1b) → 2;
@@ -38,13 +38,13 @@ from app.worker.gates import (
 from app.worker import pauza
 from app.worker.queue import (
     KUTISH_BELGI,
+    SHABLON_YOQ_BELGI,
     pauza_tirilt,
     pauza_uygot,
     pauzada_qaytar,
-    shablon_kutilsin,
     texnik_qoyib_yubor,
 )
-from app.worker.verdict import natijani_yoz
+from app.worker.verdict import IZOH_SHABLON_TOPILMADI, natijani_yoz, shablon_topilmadi_yoz
 from tender_engine import decision as _decision
 from tender_engine import evidence as _evidence
 from tender_engine.reader import ExcelTooLargeError, read_file
@@ -111,11 +111,30 @@ def _pauzada(conn, ish, token, xato):
     return True
 
 
+def _yuklovchi(ish):
+    """Havoladagi yuklagan foydalanuvchi raqami, yoki None.
+
+    Sherik havolalari `<tender_id>/<type>/<raqam>/<uuid>.xlsx` ko'rinishida
+    (`…/296436/excel2/16677/….xlsx`); uchinchi bo'lak — yuklagan hisobning
+    raqami (sherik tizimidagi). Naqsh to'liq mos kelsagina qaytariladi —
+    boshqa ko'rinishdagi havolada taxmin qilinmaydi.
+    """
+    yol = str(ish.get("link") or "").split("?")[0].split("#")[0]
+    bolaklar = [b for b in yol.replace("\\", "/").split("/") if b]
+    if len(bolaklar) < 4:
+        return None
+    tender, tur, raqam = bolaklar[-4], bolaklar[-3], bolaklar[-2]
+    if tender == str(ish.get("tender_id")) and tur == str(ish.get("type")) and raqam.isdigit():
+        return raqam
+    return None
+
+
 def _etalonni_top(conn, ish, token, yuklangan):
     """2) Etalon — `templates` jadvalidan, tender_id + type bo'yicha.
 
-    Qaytadi: (rol, etalon_yoli, tfid, etalon_note), yoki None — fayl kutish
-    yoki texnik holatga o'tkazilgan (chaqiruvchi to'xtaydi).
+    Qaytadi: (rol, etalon_yoli, tfid, etalon_note), yoki None — fayl status 4
+    («buyurtmachi fayllari topilmadi») yoki texnik holatga o'tkazilgan
+    (chaqiruvchi to'xtaydi).
 
     Diskdagi etalon/ papkasi (fayl nomidagi ID orqali) ENDI YO'Q: u fayl
     nomi bo'yicha TASODIFIY mos kelib, butunlay boshqa tenderning shabloni
@@ -158,14 +177,27 @@ def _etalonni_top(conn, ish, token, yuklangan):
                 _texnik_iz(conn, ish, sabab, yuklangan)
                 texnik_qoyib_yubor(conn, uid, sabab, doimiy=True, token=token)
                 return None
-            # F1 (2026-09-08): shablon HALI YO'Q — bu xato emas, KUTISH.
-            # Fayl o'lmaydi, urinish sarflanmaydi; shablon `templates` ga
-            # tushishi bilan `shablon_kelganini_tekshir` uyg'otadi.
+            # 2026-10-19 (buyurtmachi qarori): shablon YO'Q — KUTILMAYDI.
+            # Ilgari (F1, 2026-09-08) fayl shablonni 72/18 soat kutardi.
+            # Endi darhol status 4 + «Ushbu lot uchun buyurtmachi fayllari
+            # topilmadi.» va xabar kechikishsiz ketadi; jurnaldagi
+            # `shablon_topilmadi` satrini audit bot Telegram'ga yuboradi.
+            # Shablon keyin kelsa fayl tiriladi va haqiqiy verdikt ketadi (N1).
             sabab = (f"«{templates_db.TEMPLATES_TABLE}» da tender_id="
                      f"{ish['tender_id']} type={ish.get('type')} uchun "
-                     f"shablon hali yo'q")
+                     f"shablon yo'q")
             _texnik_iz(conn, ish, f"{KUTISH_BELGI}: {sabab}", yuklangan)
-            shablon_kutilsin(conn, uid, sabab, token=token)
+            if shablon_topilmadi_yoz(conn, ish, token, f"{SHABLON_YOQ_BELGI} — {sabab}"):
+                log(f"  [shablon yo'q] tender_id={ish['tender_id']} "
+                    f"type={ish.get('type')} file_id={ish.get('bidder_id')} → status=4 "
+                    f"«{IZOH_SHABLON_TOPILMADI}»", "warning",
+                    hodisa="shablon_topilmadi",
+                    qoshimcha={"tender_id": ish.get("tender_id"), "type": ish.get("type"),
+                               "file_id": ish.get("bidder_id"), "fayl_id": uid,
+                               "foydalanuvchi": _yuklovchi(ish), "link": str(ish["link"]),
+                               "izoh": IZOH_SHABLON_TOPILMADI})
+            else:
+                log(f"  [o'tkazildi] {uid} — claim boshqada yoki send=true")
             return None
         sabab = (f"«{templates_db.TEMPLATES_TABLE}» da tender_id="
                  f"{ish['tender_id']} type={ish.get('type')} uchun "

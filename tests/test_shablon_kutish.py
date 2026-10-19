@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
-"""F1 (2026-09-08) — «shablon kutilmoqda» holati (bog'lash qatlami, bazasiz).
+"""Shablon (buyurtmachi fayli) yo'q holati — bog'lash qatlami, bazasiz.
 
-Ishtirokchi fayli buyurtmachi shablonidan OLDIN kelsa:
-  • fayl O'LMAYDI, urinish hisobi sarflanmaydi, `retry_after` qat'iy interval;
-  • `last_error` `ETALON_KUTILMOQDA:` bilan boshlanadi;
-  • shablon `templates` ga tushgach `shablon_kelganini_tekshir` uyg'otadi;
-  • MAX_SOAT o'tsa — o'lik (sabab aniq), `jobs.status` ga tegilmaydi;
+2026-10-19 dan (buyurtmachi qarori) shablon KUTILMAYDI:
+  • fayl darhol status 4, izoh «Ushbu lot uchun buyurtmachi fayllari
+    topilmadi.», xabar kechikishsiz (`verdict.shablon_topilmadi_yoz`);
+  • `dead_reason` `ETALON_KUTILMOQDA:` bilan boshlanadi — shablon keyin
+    kelsa `shablon_kelganini_tekshir` tiriltiradi (N1), izohni tozalaydi;
+  • jurnalga `hodisa = shablon_topilmadi` satri (audit bot → Telegram);
   • `EtalonOqilmadi` (shablon bor, lekin o'qilmadi) eski texnik yo'ldan boradi.
+(Ilgari F1, 2026-09-08: fayl shablonni soatlab kutardi — `shablon_kutilsin`.)
 Verdikt zanjiriga TEGILMAGAN — bu testlar `ishni_bajar` ni 2-qadamda to'xtatadi.
+Haqiqiy bazadagi yo'l — `tests/test_shablon_topilmadi.py`.
 """
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import templates as templates_db   # noqa: E402
-from app.worker import audit, pipeline, queue  # noqa: E402
+from app.worker import audit, pipeline, queue, verdict  # noqa: E402
 
 
 class _Kursor:
@@ -58,28 +63,41 @@ class _Conn:
     def transaction(self):
         return self
 
+    def __enter__(self):
+        return self
 
-def test_kutish_urinish_sarflamaydi_va_olmaydi(monkeypatch):
-    conn = _Conn(javoblar=[(False,)])            # created_at hali chegaradan o'tmagan
-    queue.shablon_kutilsin(conn, "77", "tender_id=5 type=excel2 uchun shablon hali yo'q", token="tok")
-    sql, prm = conn.jurnal[0]
-    assert "attempts = greatest(attempts - 1, 0)" in sql          # ish_ol oshirgani qaytariladi
-    assert "retry_after = now() + interval '1 second' * %(i)s" in sql
-    assert "dead_at = now()" not in sql
-    assert prm["x"].startswith(queue.KUTISH_BELGI + ":") and prm["i"] == queue.ETALON_KUTISH_INTERVAL
-    assert prm["tok"] == "tok" and "claim_token = %(tok)s" in sql   # fencing saqlanadi
-    assert len(conn.jurnal) == 1 and conn.commit_soni == 1
+    def __exit__(self, *a):
+        return False
 
 
-def test_kutish_chegaradan_otsa_olik(monkeypatch):
-    conn = _Conn(javoblar=[(True,)])             # MAX_SOAT o'tgan
-    queue.shablon_kutilsin(conn, "77", "shablon hali yo'q")
-    assert len(conn.jurnal) == 2
-    sql2, prm2 = conn.jurnal[1]
-    assert "dead_at = now()" in sql2 and "jobs" not in sql2.split("UPDATE ")[1].split(" SET")[0].lower().replace("jobs_state", "")
-    assert f"{queue.ETALON_KUTISH_MAX_SOAT} soat kutildi" in prm2["x"]
-    # `files.status` ga tegilmaydi — faqat jobs_state
-    assert all(s.startswith("UPDATE jobs_state") for s, _ in conn.jurnal)
+def test_shablon_topilmadi_yoz_bitta_tranzaksiyada():
+    conn = _Conn()
+    ish = {"uuid": "77", "bidder_id": 9, "tender_id": 5, "type": "excel2"}
+    assert verdict.shablon_topilmadi_yoz(conn, ish, "tok", queue.KUTISH_BELGI + ": yo'q") is True
+    assert len(conn.jurnal) == 3
+    (s1, p1), (s2, p2), (s3, p3) = conn.jurnal
+    assert s1.startswith("UPDATE jobs_state SET") and "dead_at = now()" in s1
+    assert "attempts = greatest(attempts - 1, 0)" in s1          # ish_ol oshirgani qaytariladi
+    assert "claim_token = %s" in s1 and p1[3:] == ("tok", "tok")  # fencing
+    assert p1[0].startswith(queue.KUTISH_BELGI + ":") and p1[1] == p1[0]
+    assert s2.startswith("UPDATE files SET status = %s, comment = %s")
+    assert p2[:2] == (4, verdict.IZOH_SHABLON_TOPILMADI)
+    assert s3.startswith("INSERT INTO yuborish_navbati")
+    assert p3 == (77, 9, 4, verdict.IZOH_SHABLON_TOPILMADI, "texnik")
+    assert verdict.IZOH_SHABLON_TOPILMADI == "Ushbu lot uchun buyurtmachi fayllari topilmadi."
+
+
+@pytest.mark.parametrize("link, kutilgan", [
+    ("https://apisitender.mc.uz/storage/296436/excel2/16677/80c7.xlsx", "16677"),
+    ("296436/excel2/16677/80c7.xlsx", "16677"),
+    ("https://apisitender.mc.uz/storage/296436/excel2/16677/80c7.xlsx?token=x", "16677"),
+    ("https://apisitender.mc.uz/storage/111111/excel2/16677/80c7.xlsx", None),  # boshqa tender
+    ("https://apisitender.mc.uz/storage/296436/excel3/16677/80c7.xlsx", None),  # boshqa tur
+    ("https://apisitender.mc.uz/storage/296436/excel2/abc/80c7.xlsx", None),    # raqam emas
+    ("80c7.xlsx", None),
+])
+def test_yuklovchi_faqat_aniq_naqshda(link, kutilgan):
+    assert pipeline._yuklovchi({"link": link, "tender_id": 296436, "type": "excel2"}) == kutilgan
 
 
 def test_shablon_kelganini_tekshir_sql(monkeypatch):
@@ -111,8 +129,13 @@ def _ishni_bajar_2qadamgacha(monkeypatch, tmp_path, etalon_xato):
 
     monkeypatch.setattr(templates_db, "etalon_ol", etalon_ol)
     chaqiruvlar = []
-    monkeypatch.setattr(pipeline, "shablon_kutilsin",
-                        lambda conn, uid, sabab, token=None: chaqiruvlar.append(("kutish", uid, sabab)))
+    def shablon_topilmadi_yoz(conn, ish, token, sabab):
+        chaqiruvlar.append(("yoq", ish["uuid"], sabab))
+        return True
+
+    monkeypatch.setattr(pipeline, "shablon_topilmadi_yoz", shablon_topilmadi_yoz)
+    monkeypatch.setattr(pipeline, "log", lambda msg, level="info", hodisa=None, qoshimcha=None:
+                        chaqiruvlar.append(("log", hodisa, qoshimcha)) if hodisa else None)
     monkeypatch.setattr(pipeline, "texnik_qoyib_yubor",
                         lambda conn, uid, xato, doimiy=False, token=None: chaqiruvlar.append(("texnik", uid, xato, doimiy)))
     ish = {"uuid": "77", "link": "5/excel2/9/x.xlsx", "type": "excel2", "bidder_id": 9, "tender_id": 5}
@@ -120,19 +143,26 @@ def _ishni_bajar_2qadamgacha(monkeypatch, tmp_path, etalon_xato):
     return chaqiruvlar
 
 
-def test_shablon_yoq_kutish_yoli(monkeypatch, tmp_path):
+def test_shablon_yoq_darhol_status4_va_telegram_satri(monkeypatch, tmp_path):
     ch = _ishni_bajar_2qadamgacha(monkeypatch, tmp_path,
                                   templates_db.EtalonYoq("templates da tender_id=5 type=excel2 uchun etalon topilmadi"))
-    assert ch and ch[0][0] == "kutish" and ch[0][1] == "77"
-    assert "shablon hali yo'q" in ch[0][2]
+    assert ch[0][0] == "yoq" and ch[0][1] == "77"
+    assert ch[0][2].startswith(queue.KUTISH_BELGI + ":")   # N1 tiriltirish va toshqin shu belgi bilan
+    assert ch[0][2].startswith(queue.SHABLON_YOQ_BELGI)    # yuboruvchi o'z xabarini yozmaydi
     assert not any(c[0] == "texnik" for c in ch)          # eski texnik yo'lga tushmaydi
+    jurnal = [c for c in ch if c[0] == "log"]
+    assert len(jurnal) == 1 and jurnal[0][1] == "shablon_topilmadi"
+    q = jurnal[0][2]
+    assert (q["tender_id"], q["type"], q["file_id"], q["fayl_id"], q["foydalanuvchi"]) == \
+        (5, "excel2", 9, "77", "9")
+    assert q["link"] == "5/excel2/9/x.xlsx" and q["izoh"] == verdict.IZOH_SHABLON_TOPILMADI
 
 
 def test_shablon_bor_lekin_oqilmadi_eski_texnik_yol(monkeypatch, tmp_path):
     ch = _ishni_bajar_2qadamgacha(monkeypatch, tmp_path,
                                   templates_db.EtalonOqilmadi("etalon yuklab olinmadi (templates.id=3)"))
     assert ch and ch[0][0] == "texnik" and ch[0][3] is False   # backoff bilan qayta uriniladi
-    assert not any(c[0] == "kutish" for c in ch)
+    assert not any(c[0] == "yoq" for c in ch)
 
 
 # ── F3: notanish type ───────────────────────────────────────────────────────
@@ -145,7 +175,7 @@ def test_notanish_type_va_shablon_yoq_darhol_olik(monkeypatch, tmp_path):
     monkeypatch.setattr(templates_db, "etalon_ol",
                         lambda conn, t, typ: (_ for _ in ()).throw(templates_db.EtalonYoq("yo'q")))
     ch = []
-    monkeypatch.setattr(pipeline, "shablon_kutilsin", lambda *a, **k: ch.append(("kutish",)))
+    monkeypatch.setattr(pipeline, "shablon_topilmadi_yoz", lambda *a, **k: ch.append(("yoq",)))
     monkeypatch.setattr(pipeline, "texnik_qoyib_yubor",
                         lambda conn, uid, xato, doimiy=False, token=None: ch.append(("texnik", xato, doimiy)))
     ish = {"uuid": "78", "link": "5/excel7/9/x.xlsx", "type": "excel7", "bidder_id": 9, "tender_id": 5}

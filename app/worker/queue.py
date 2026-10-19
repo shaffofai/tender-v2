@@ -31,15 +31,24 @@ LEASE_MINUTES = _S.lease_minutes
 MAX_ATTEMPTS = _S.max_attempts
 RETRY_BASE_SECONDS = _S.retry_base_seconds
 RETRY_MAX_SECONDS = _S.retry_max_seconds
-ETALON_KUTISH_INTERVAL = _S.etalon_kutish_interval      # soniya
-ETALON_KUTISH_MAX_SOAT = _S.etalon_kutish_max_soat
 
 
+#: Shablon (buyurtmachi fayli) yo'qligi sababli o'lgan qatorlarning
+#: `last_error` / `dead_reason` boshi. 2026-10-19 gacha bu «kutish» belgisi
+#: edi (F1: fayl shablonni soatlab kutardi); endi kutilmaydi — fayl darhol
+#: status 4 oladi (`verdict.shablon_topilmadi_yoz`), lekin belgi o'sha:
+#: `shablon_kelganini_tekshir` (N1) va yuboruvchining toshqin to'xtatgichi
+#: shu bo'yicha taniydi, eski qatorlar ham.
 KUTISH_BELGI = "ETALON_KUTILMOQDA"
+#: Shu boshli `dead_reason` — worker o'zi status 4, izoh va xabarni yozgan
+#: (`verdict.shablon_topilmadi_yoz`); yuboruvchi bunday faylga o'z texnik
+#: xabarini YOZMAYDI (`app/sender/technical.py` dagi nusxasi bilan bir xil).
+SHABLON_YOQ_BELGI = KUTISH_BELGI + ": SHABLON_YOQ"
 
 
 # 4 — texnik sabab bilan tekshirib bo'lmadi, taslim bo'lindi (2026-09-23).
-# FAQAT `olik_belgilash` qo'yadi; `requeue`, `shablon_kelganini_tekshir` (N1),
+# `olik_belgilash` va (shablon yo'q, 2026-10-19) `verdict.shablon_topilmadi_yoz`
+# qo'yadi; `requeue`, `shablon_kelganini_tekshir` (N1),
 # `api_server` (link o'zgarsa) 0 ga qaytaradi; `natijani_yoz` verdikt bilan bosadi.
 STATUS_TEXNIK = _evidence.STATUS_TEXNIK
 
@@ -184,50 +193,16 @@ def texnik_qoyib_yubor(conn, uuid, xato, doimiy=False, token=None):
     conn.commit()
 
 
-def shablon_kutilsin(conn, uuid, sabab, token=None):
-    """F1: shu tender+type uchun shablon HALI YO'Q — fayl kutadi, O'LMAYDI.
-
-    `texnik_qoyib_yubor` dan farqi: urinish hisobi sarflanmaydi (`ish_ol`
-    oshirgan bittasi qaytariladi), backoff o'rniga qat'iy
-    `ETALON_KUTISH_INTERVAL`, `last_error` `ETALON_KUTILMOQDA:` bilan
-    boshlanadi — `shablon_kelganini_tekshir` shu belgi bo'yicha uyg'otadi.
-    `jobs_state.created_at` dan `ETALON_KUTISH_MAX_SOAT` o'tgan bo'lsa —
-    o'lik (sabab aniq), `jobs.status` baribir 0 qoladi (OLTIN QOIDA).
-    """
-    fence = "AND (%(tok)s::text IS NULL OR claim_token = %(tok)s)"
-    xato = f"{KUTISH_BELGI}: {sabab}"[:2000]
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE jobs_state SET claimed_at = NULL, claim_token = NULL, "
-            "attempts = greatest(attempts - 1, 0), last_error = %(x)s, "
-            "retry_after = now() + interval '1 second' * %(i)s, updated_at = now() "
-            f"WHERE uuid = %(u)s AND dead_at IS NULL {fence} "
-            "RETURNING created_at < now() - interval '1 hour' * %(m)s",
-            {"x": xato, "u": uuid, "tok": token,
-             "i": ETALON_KUTISH_INTERVAL, "m": ETALON_KUTISH_MAX_SOAT})
-        qator = cur.fetchone()
-        if qator and qator[0]:
-            cur.execute(
-                "UPDATE jobs_state SET dead_at = now(), dead_reason = %(x)s, "
-                "retry_after = NULL, updated_at = now() "
-                "WHERE uuid = %(u)s AND dead_at IS NULL",
-                {"x": f"{xato} ({ETALON_KUTISH_MAX_SOAT} soat kutildi)"[:2000],
-                 "u": uuid})
-            log(f"  [O'LIK] {uuid}: shablon {ETALON_KUTISH_MAX_SOAT} soat kutildi — "
-                f"{sabab[:90]}")
-        elif qator:
-            log(f"  [kutilmoqda] {uuid}: {sabab[:90]} — "
-                f"{ETALON_KUTISH_INTERVAL} s dan keyin qayta ko'riladi")
-    conn.commit()
-
-
 def shablon_kelganini_tekshir(conn):
-    """F1: kutayotgan fayllardan shabloni ENDI bor bo'lganlarini uyg'otadi.
+    """Shabloni ENDI kelgan fayllarni qayta navbatga qaytaradi (F1/N1).
 
-    `jobs_state.last_error LIKE 'ETALON_KUTILMOQDA%'` qatorlar `files` →
-    `templates` (tender_id + type, deleted_at IS NULL) bilan solishtiriladi;
-    shablon topilsa `retry_after = now()` — keyingi `ish_ol` darhol oladi.
-    Faqat `jobs_state` ga yoziladi. Qaytaradi: uyg'otilganlar soni.
+    `ETALON_KUTILMOQDA` belgili qatorlar `files` → `templates` (tender_id +
+    type, deleted_at IS NULL) bilan solishtiriladi; shablon topilsa:
+      1) hali tirik kutayotganlar (2026-10-19 dan oldingi eski qatorlar) —
+         `retry_after = now()`;
+      2) shablon yo'qligi uchun status 4 olganlar — tiriladi (status 4 → 0,
+         izoh tozalanadi), haqiqiy verdikt ikkinchi xabar bo'lib ketadi.
+    Qaytaradi: uyg'otilganlar soni.
     """
     shablon_bor = (f"EXISTS (SELECT 1 FROM {TEMPLATES_TABLE} t "
                    f"WHERE t.tender_id = j.tender_id AND t.type = j.type "
@@ -246,20 +221,21 @@ def shablon_kelganini_tekshir(conn):
               AND {shablon_bor}
             """, (KUTISH_BELGI + "%",))
         n = cur.rowcount
-        # 2) N1 (2026-09-23): kutib O'LGAN fayllar ham tirilsin.
-        #    `shablon_kutilsin` o'lik qilganda `dead_at = now()` VA
-        #    `retry_after = NULL` qo'yadi — yuqoridagi shart esa aynan
-        #    ularning teskarisini talab qiladi. Natijada chegaragacha
-        #    (ETALON_KUTISH_MAX_SOAT) kutib o'lgan
-        #    fayl shablon kelganda ham ABADIY verdiktsiz qolardi. Faqat
-        #    ETALON_KUTILMOQDA sababli o'lganlar tiriladi (boshqa o'liklar —
-        #    tarmoq, buzuq fayl — bu yerga tegishli emas).
-        #    Avval `files.status` 4 → 0 (o'lik fayl supurgi bilan 4 bo'lgan;
-        #    `ish_ol` faqat 0 ni oladi), keyin jobs_state — bitta tranzaksiya.
+        # 2) N1 (2026-09-23): shablon yo'qligi uchun O'LGAN fayllar ham tirilsin.
+        #    Ularda `dead_at` bor va `retry_after = NULL` — yuqoridagi shart
+        #    esa aynan teskarisini talab qiladi; busiz shablon kelganda ham
+        #    fayl ABADIY verdiktsiz qolardi. 2026-10-19 dan bu asosiy yo'l:
+        #    shablon yo'q fayl darhol status 4 oladi (`shablon_topilmadi_yoz`).
+        #    Faqat ETALON_KUTILMOQDA sababli o'lganlar tiriladi (boshqa
+        #    o'liklar — tarmoq, buzuq fayl — bu yerga tegishli emas).
+        #    Avval `files.status` 4 → 0 va «buyurtmachi fayllari topilmadi»
+        #    izohi tozalanadi (`ish_ol` faqat 0 ni oladi; izoh verdikt bilan
+        #    yangilanadi, texnik holatda eskisi qolmasin), keyin jobs_state —
+        #    bitta tranzaksiya.
         cur.execute(
             f"""
             UPDATE {JOBS_TABLE} j
-            SET status = 0, updated_at = now()
+            SET status = 0, comment = NULL, updated_at = now()
             FROM jobs_state s
             WHERE {_kalit_join('j', 's')}
               AND j.status = %s
@@ -282,7 +258,7 @@ def shablon_kelganini_tekshir(conn):
         tirildi = cur.rowcount
     conn.commit()
     if tirildi:
-        log(f"[shablon keldi] {tirildi} ta kutib O'LGAN fayl tiriltirildi")
+        log(f"[shablon keldi] {tirildi} ta shablonsiz (status 4) fayl qayta tekshiruvga qaytarildi")
     if n:
         log(f"[shablon keldi] {n} ta kutayotgan fayl navbatga qaytarildi")
     return n + tirildi
@@ -294,7 +270,7 @@ PAUZA_BELGI = "PAUZA"
 def pauzada_qaytar(conn, uuid, sabab, kechikish, token=None):
     """PAUZA: yuklab olish MANBA nosozligi sababli bo'lmadi — fayl JAZOSIZ qaytadi.
 
-    `shablon_kutilsin` bilan bir xil naqsh: urinish hisobi sarflanmaydi
+    Urinish hisobi sarflanmaydi
     (`ish_ol` oshirgan bittasi qaytariladi), fayl o'lmaydi, `last_error`
     `PAUZA:` bilan boshlanadi — pauza yopilganda `pauza_uygot` shu belgi
     bo'yicha uyg'otadi. `kechikish` — keyingi sinov shu faylni emas, BOSHQA
@@ -422,10 +398,12 @@ def olik_belgilash(conn):
             """,
             (MAX_ATTEMPTS,))
         qatorlar = cur.fetchall()
-        # `files.status = 4` (texnik, taslim) — YAGONA qo'yiladigan joy.
-        # `dead_at` uch yo'ldan qo'yiladi (texnik_qoyib_yubor doimiy=True,
-        # shablon_kutilsin ETALON_KUTISH_MAX_SOAT, yuqoridagi urinishlar), uchalasini shu
-        # supurgi bitta shart bilan tutadi: o'lik VA hali 0. Oradagi kechikish
+        # `files.status = 4` (texnik, taslim) — texnik o'limlar uchun shu yer.
+        # `dead_at` ikki yo'ldan qo'yiladi (texnik_qoyib_yubor doimiy=True,
+        # yuqoridagi urinishlar), ikkalasini shu supurgi bitta shart bilan
+        # tutadi: o'lik VA hali 0. (Shablon yo'q holati status 4 ni o'zi,
+        # izoh va xabar bilan bitta tranzaksiyada qo'yadi —
+        # `verdict.shablon_topilmadi_yoz`.) Oradagi kechikish
         # eng ko'pi POLL_INTERVAL (5 s) — yuboruvchining 6 soatlik kechikishi
         # oldida sezilmaydi. Verdikt olgan (1/2/3) qatorga tegilmaydi.
         cur.execute(

@@ -133,8 +133,6 @@ class Worker:
     retry_base_seconds: int
     retry_max_seconds: int
     reconnect_max_wait: int
-    etalon_kutish_interval: int
-    etalon_kutish_max_soat: int
     discovery_interval: int
     pauza_ketma_ket: int
     pauza_tenderlar: int
@@ -156,16 +154,9 @@ def worker():
         retry_base_seconds=_son("RETRY_BASE_SECONDS", "60"),
         retry_max_seconds=_son("RETRY_MAX_SECONDS", "900"),
         reconnect_max_wait=_son("RECONNECT_MAX_WAIT", "60"),
-        # F1: «shablon kutilmoqda» (2026-09-08). Ishtirokchi fayli buyurtmachi
-        # shablonidan OLDIN kelsa, u xato emas — kutish holati. Fayl o'lmaydi
-        # va urinish hisobi sarflanmaydi; shablon `templates` ga tushgan zahoti
-        # `shablon_kelganini_tekshir` uni uyg'otadi. Chegara: shuncha soat
-        # kutilsa — o'lik ro'yxatiga (odam ko'rsin), status baribir 0 qoladi.
-        etalon_kutish_interval=_son("ETALON_KUTISH_INTERVAL", "600"),   # soniya
-        # 2026-10-16 (buyurtmachi qarori): 72 → 18. Shablon kelmagan fayl
-        # endi 18 soatdan keyin «shablon yo'q» xabarini oladi; shablon
-        # keyinroq kelsa ham fayl tiriladi va haqiqiy verdikt ketadi (N1).
-        etalon_kutish_max_soat=_son("ETALON_KUTISH_MAX_SOAT", "18"),
+        # ETALON_KUTISH_INTERVAL / ETALON_KUTISH_MAX_SOAT — 2026-10-19 dan YO'Q:
+        # shablon kutilmaydi (buyurtmachi qarori), fayl darhol status 4 oladi
+        # (`verdict.shablon_topilmadi_yoz`). `.env` da qolsa e'tiborsiz.
         # To'liq kashfiyot skani shuncha soniyada bir marta (`kashf_qil`).
         discovery_interval=_son("DISCOVERY_INTERVAL", "300"),
         # PAUZA (2026-10-16, `app/worker/pauza.py`): ketma-ket shuncha

@@ -512,6 +512,17 @@ def test_log_ulagichi(navbat):
     assert abs((jurnal.hozir() - q[0]["yaratildi"]).total_seconds()) < 5
 
 
+def test_log_ulagichi_hodisa_va_qoshimcha(navbat):
+    """`log(..., hodisa=, qoshimcha=)` — audit bot alohida taniydigan satr (2026-10-19)."""
+    log("[sinov] shablon yo'q", "warning", hodisa="shablon_topilmadi",
+        qoshimcha={"tender_id": 5, "type": "excel2"})
+    log("[sinov] oddiy satr")
+    q = _qatorlar(navbat, "log")
+    assert q[0]["hodisa"] == "shablon_topilmadi" and q[0]["daraja"] == "warning"
+    assert q[0]["qoshimcha"] == {"tender_id": 5, "type": "excel2"}
+    assert q[1]["hodisa"] == "log" and "qoshimcha" not in q[1]
+
+
 def test_log_ulagichi_hech_qachon_yiqilmaydi(navbat, monkeypatch):
     monkeypatch.setattr(jurnal, "qoy", lambda qator: 1 / 0)
     log("[sinov] ulagich yiqilsa ham log yozilaveradi")

@@ -10,6 +10,7 @@ hech qachon tenderga yetmaydi va buni hech narsa ko'rsatmaydi.
 from psycopg.types.json import Jsonb
 
 from app.db.schema import JOBS_TABLE, _kalit_tengligi, _yashamayotgan, _yuborilmagan
+from tender_engine import evidence as _evidence
 
 
 def natijani_yoz(conn, ish, token, res):
@@ -105,3 +106,59 @@ def outbox_ga_qoy(cur, ish, status, comment, sabab):
         """,
         (fayl_id, int(file_id), int(status), comment or "", sabab))
     return cur.rowcount > 0
+
+
+#: Shablon (buyurtmachi fayli) topilmaganda ishtirokchiga va `files.comment`
+#: ga yoziladigan matn — buyurtmachi qarori, 2026-10-19.
+IZOH_SHABLON_TOPILMADI = "Ushbu lot uchun buyurtmachi fayllari topilmadi."
+
+
+def shablon_topilmadi_yoz(conn, ish, token, sabab):
+    """Shablon yo'q — KUTILMAYDI (2026-10-19, buyurtmachi qarori): darhol status 4.
+
+    Ilgari fayl shablonni `ETALON_KUTISH_MAX_SOAT` (72, keyin 18) soat kutar,
+    keyin yuboruvchi yana 6 soat ushlab, «shablon mavjud emas» deb yozardi —
+    shablon umuman kelmaydigan tenderlarda ishtirokchi ~1–3 kun javobsiz
+    qolardi. Endi BITTA tranzaksiyada:
+
+      • `jobs_state` — o'lik, `dead_reason` = `sabab` (`ETALON_KUTILMOQDA:`
+        bilan boshlanadi): shablon keyin kelsa `shablon_kelganini_tekshir`
+        faylni TIRILTIRADI va haqiqiy verdikt ikkinchi xabar bo'lib ketadi (N1);
+        yuboruvchining toshqin to'xtatgichi ham bu sababni ushlamaydi;
+      • `files.status = 4`, `files.comment` = `IZOH_SHABLON_TOPILMADI`;
+      • chiquvchi xabar (status 4, shu matn) — kechikishsiz. Yuboruvchi o'z
+        texnik xabarini yozmaydi: `created_at >= dead_at` (bir tranzaksiya).
+
+    Claim tokeni mos kelmasa (fayl boshqa jarayonda) hech narsa yozilmaydi.
+    Qaytaradi: yozildimi.
+    """
+    status = _evidence.STATUS_TEXNIK
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE jobs_state
+                SET claimed_at = NULL, claim_token = NULL,
+                    attempts = greatest(attempts - 1, 0),
+                    last_error = %s, dead_at = now(), dead_reason = %s,
+                    retry_after = NULL, updated_at = now()
+                WHERE uuid = %s AND dead_at IS NULL
+                  AND (%s::text IS NULL OR claim_token = %s)
+                """,
+                (sabab[:2000], sabab[:2000], ish["uuid"], token, token),
+            )
+            if cur.rowcount == 0:
+                return False
+            cur.execute(
+                f"""
+                UPDATE {JOBS_TABLE}
+                SET status = %s, comment = %s, updated_at = now()
+                WHERE {_kalit_tengligi()}
+                  AND {_yuborilmagan()}{_yashamayotgan()}
+                """,
+                (status, IZOH_SHABLON_TOPILMADI, ish["uuid"]),
+            )
+            yozildi = cur.rowcount > 0
+            if yozildi:
+                outbox_ga_qoy(cur, ish, status, IZOH_SHABLON_TOPILMADI, "texnik")
+    return yozildi

@@ -215,8 +215,8 @@ def _shablon_uygot():
 
     ALOHIDA ulanishda: `shablon_kelganini_tekshir` ichida `conn.commit()` bor,
     ya'ni asosiy ulanishda chaqirilsa ochiq tranzaksiyani yopib yuborardi.
-    Xato bu yerda YUTILADI — uyg'otish qulaylik, `ETALON_KUTISH_INTERVAL`
-    (600 s) baribir faylni o'zi qaytaradi.
+    Xato bu yerda YUTILADI — worker ham bo'sh siklida
+    `shablon_kelganini_tekshir` ni chaqiradi, fayl baribir qaytadi.
     """
     try:
         with psycopg.connect(DATABASE_URL, connect_timeout=30) as c:

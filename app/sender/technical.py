@@ -22,6 +22,12 @@ TEXNIK_TOSHQIN_MAKS_KUTISH = _S.texnik_toshqin_maks_kutish
 #: `dead_reason` boshi. Import QILINMAYDI: worker moduli `config.worker()` ni
 #: o'qiydi, yuboruvchi esa worker sozlamasiga bog'lanmasligi kerak.
 SHABLON_OLIM_BELGI = "ETALON_KUTILMOQDA"
+#: `app.worker.queue.SHABLON_YOQ_BELGI` — «shablon yo'q» (2026-10-19): worker
+#: status 4, izoh va xabarni O'ZI yozgan. Yuboruvchi bunday o'limga texnik
+#: xabar yozmaydi — fayl qayta ishlansa (`--requeue`, sherik havolani
+#: almashtirsa) eski xabar bilan to'qnashib yangi qator tushmaydi, va busiz
+#: 6 soatdan keyin ishtirokchiga IKKINCHI, boshqa matnli xabar ketardi.
+SHABLON_YOQ_BELGI = SHABLON_OLIM_BELGI + ": SHABLON_YOQ"
 
 
 # ---------------------------------------------------------------------------
@@ -82,11 +88,15 @@ def _texnik_nomzod_sharti():
            AND (s.claimed_at IS NULL
                 OR s.claimed_at < now() - interval '{YUBORISH_TEXNIK_LEASE} seconds')
            AND f.status = {int(STATUS_TEXNIK)}
+           AND NOT starts_with(coalesce(s.dead_reason, ''), '{SHABLON_YOQ_BELGI}')
            AND {_yuborilmagan('f')}{_yashamayotgan('f')}
            AND NOT EXISTS (SELECT 1 FROM yuborish_navbati y
                             WHERE y.fayl_id = f.{_pk()} AND y.sabab = 'texnik'
-                              AND y.created_at > s.dead_at)
+                              AND y.created_at >= s.dead_at)
     """
+    # `>=` (2026-10-19): «shablon yo'q» holatida worker o'lim va xabarni BITTA
+    # tranzaksiyada yozadi — `now()` ikkalasida bir xil. `>` bo'lsa yuboruvchi
+    # o'sha faylga 6 soatdan keyin IKKINCHI texnik xabar yozardi.
 
 
 def _ushlanadigan_shart():
