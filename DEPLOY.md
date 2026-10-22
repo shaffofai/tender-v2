@@ -22,7 +22,7 @@ Compose loyihasi `shaffofai-v2-tender-v2`, beshta xizmat:
 | `migrate` | `shaffofai-v2-tender-v2-migrate` | Bir martalik: sxema migratsiyalari, ilova roli va huquqlari. Har `up` da idempotent yuradi |
 | `api` | `shaffofai-v2-tender-v2-api` | Kiruvchi API (Basic Auth). Platforma tarmog'ida `tender-v2:8000` |
 | `worker` | `shaffofai-v2-tender-v2-worker` | Tekshiruv: yuklab olish, shablon, verdikt |
-| `sender` | `shaffofai-v2-tender-v2-sender` | Verdiktlarni tender tizimiga yuboradi |
+| `sender` | `shaffofai-v2-tender-v2-sender` | Verdiktlarni tender tizimiga yuboradi. **2026-10-22 dan o'chiq** (§5 «Sender o'chiq») |
 
 Nomlar serverdagi eski `~/tender_deploy` konteynerlari (`tender-postgres`,
 `tender-ai`, `tender-api`, `tender-yuboruvchi`) bilan to'qnashmaydi.
@@ -72,7 +72,7 @@ sudo docker compose config --quiet && echo "config OK"
 sudo docker compose pull
 sudo docker compose up -d --no-build
 sudo docker logs shaffofai-v2-tender-v2-migrate    # «0001_boshlangich_sxema qo'llandi», «0002_sorov_jurnali qo'llandi»
-sudo docker compose ps                             # db, api, worker, sender — healthy
+sudo docker compose ps                             # db, api, worker — healthy (sender o'chiq, §5)
 ```
 
 `.env` dagi `COMPOSE_FILE=docker-compose.yml:docker-compose.edge.yml` tufayli
@@ -314,6 +314,41 @@ versiyasi 2 ni TALAB qiladi (`migrate` yurmagan bo'lsa xizmatlar «baza sxemasi
 eski» deb to'xtaydi); eski rasm esa versiya 2 bilan o'zgarishsiz ishlaydi —
 qaytish uchun bazada hech narsa qilish shart emas. Jurnalni o'qish kalitlari —
 §6 («So'rov jurnali»).
+
+### Sender o'chiq (2026-10-22 dan)
+
+Tender tizimi natijalarni (`files.status`, `files.comment`) bazadan o'zi
+o'qiydi, shuning uchun `sender` compose'da `profiles: [sender]` ostida:
+`up -d` uni ishga TUSHIRMAYDI. Sender `files` ga tegmaydi — o'chirilishi tender
+o'qiydigan ma'lumotni o'zgartirmaydi. Worker esa har verdiktni navbatga
+(`yuborish_navbati`, `holat = 0`) yozishda davom etadi.
+
+Shu o'zgarishli rasmga birinchi o'tishda ishlab turgan konteynerni qo'lda
+to'xtating (`up -d` profildagi eski konteynerni o'zi o'chirmaydi):
+
+```bash
+sudo docker stop shaffofai-v2-tender-v2-sender && sudo docker rm shaffofai-v2-tender-v2-sender
+sudo docker compose ps                                     # sender yo'q
+```
+
+**Qayta yoqishdan OLDIN** — o'chiq paytda to'plangan navbat yoqilgan zahoti
+tender tizimiga ketadi. Sonini ko'ring:
+
+```sql
+SELECT holat, count(*), min(created_at), max(created_at) FROM yuborish_navbati
+WHERE holat IN (0, 1) GROUP BY holat;
+```
+
+Eskilari kerak bo'lmasa — yuborilmaydigan qilib belgilang (keyin
+`--qayta-och` ISHLATMANG — u bularni ham qayta ochadi):
+
+```sql
+UPDATE yuborish_navbati SET holat = 3, band_until = NULL,
+       xato = 'SENDER_OCHIQ_EMAS: 2026-10-22 dan sender o''chiq edi — yuborilmadi'
+WHERE holat IN (0, 1);
+```
+
+Yoqish: `.env` da `COMPOSE_PROFILES=sender`, keyin `sudo docker compose up -d sender`.
 
 `docker compose stop` **xavfsiz**: worker joriy faylni tugatib to'xtaydi
 (SIGTERM, 120 s), yarim ishlangan fayl lease tugagach qayta navbatga tushadi.

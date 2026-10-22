@@ -155,8 +155,13 @@ services:
     stop_grace_period: 120s
 
   # Chiquvchi yuboruvchi. `--health`: https, kalitlar, navbat jadvali, toshqin.
+  # 2026-10-22 dan O'CHIQ: tender tizimi natijalarni bazadan o'zi o'qiydi.
+  # `up -d` uni ishga tushirmaydi; yoqish — `.env` da COMPOSE_PROFILES=sender.
+  # Worker navbatga (`yuborish_navbati`) yozishda davom etadi — yoqishdan
+  # oldin DEPLOY.md «Sender o'chiq» bo'limiga qarang (eski navbat ketib qoladi).
   sender:
     <<: *app
+    profiles: [sender]
     container_name: shaffofai-v2-tender-v2-sender
     entrypoint: ["python", "yuboruvchi.py"]
     command: ["--davomiy"]
