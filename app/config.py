@@ -64,7 +64,8 @@ def _matn(nom, standart=""):
 
 def tozala():
     """Keshlangan sozlamalarni tashlaydi (testlar muhitni o'zgartirgach)."""
-    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, migratsiya, jurnal, dump):
+    for f in (baza, worker, yuklash, shablon, api, yuboruvchi, buyurtmachi_api,
+              migratsiya, jurnal, dump):
         f.cache_clear()
 
 
@@ -385,6 +386,52 @@ def yuboruvchi():
         # Xom qiymatlar — tahlili va OLTIN QOIDA tekshiruvi `app/sender/statuses.py` da.
         tender_qabul_statuslar=os.environ.get("TENDER_QABUL_STATUSLAR", "1,2"),
         tender_status_xarita=os.environ.get("TENDER_STATUS_XARITA", "3:2"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Buyurtmachi fayllari API si (worker — 2026-10-22)
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class BuyurtmachiApi:
+    url: str
+    login: str
+    parol: str
+    timeout: int
+    interval: int
+    kun: int
+
+
+def _buyurtmachi_url():
+    """`BUYURTMACHI_API_URL`; bo'sh — `TENDER_API_URL` dan, `0` — o'chiq.
+
+    Sherikda ikkala yo'l bir joyda: `.../ai/set-result` (verdikt) va
+    `.../ai/get-customer-files/<tender_id>` (buyurtmachi fayllari).
+    """
+    url = _matn("BUYURTMACHI_API_URL")
+    if url.lower() in ("0", "off", "false", "no"):
+        return ""
+    if url:
+        return url.rstrip("/")
+    tender = _matn("TENDER_API_URL").rstrip("/")
+    if tender.endswith("/set-result"):
+        return tender[: -len("/set-result")] + "/get-customer-files"
+    return ""
+
+
+@functools.lru_cache(maxsize=None)
+def buyurtmachi_api():
+    return BuyurtmachiApi(
+        url=_buyurtmachi_url(),
+        # Kalitlar verdikt yo'li bilan bir xil (sherik 2026-10-22 da tasdiqladi).
+        login=_matn("TENDER_API_LOGIN"),
+        parol=_matn("TENDER_API_PAROL"),
+        timeout=_son("BUYURTMACHI_API_TIMEOUT", "20"),
+        # Bitta tender shuncha soniyada ko'pi bilan BIR MARTA so'raladi —
+        # ishtirokchi uchala faylni birga va qayta-qayta yuklaydi.
+        interval=_son("BUYURTMACHI_API_INTERVAL", "1800"),
+        # Fon qidiruvi faqat shuncha kunlik status 4 fayllar uchun.
+        kun=_son("BUYURTMACHI_API_KUN", "7"),
     )
 
 

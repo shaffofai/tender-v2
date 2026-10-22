@@ -39,7 +39,7 @@ from app import config, jurnal
 from app.db import DATABASE_URL, safe_dsn, schema
 from app.db.schema import JOBS_TABLE, _pk, _yashamayotgan, _yuborilmagan
 from app.log import _utf8_stdout, log
-from app.worker import loop, pauza
+from app.worker import buyurtmachi, loop, pauza
 from app.worker.gates import STATUS_IDENTICAL
 from app.worker.loop import POLL_INTERVAL, _etalon_manbaini_tekshir
 from app.worker.pipeline import ishni_bajar
@@ -252,6 +252,9 @@ def tekshirishni_boshla(chegara=None, davomiy=False, tasdiqsiz=False):
                     try:
                         olik_belgilash(conn)
                         shablon_kelganini_tekshir(conn)
+                        # 2026-10-22: shablonsiz status 4 fayllar uchun sherik
+                        # API sidan buyurtmachi fayllari (60 s da bir marta).
+                        buyurtmachi.supur(conn)
                     except (psycopg.OperationalError, psycopg.InterfaceError) as exc:
                         conn = _qayta_ulan(conn, exc)
                         continue

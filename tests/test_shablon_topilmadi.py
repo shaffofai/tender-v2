@@ -72,3 +72,76 @@ def test_shablon_yoq_darhol_va_shablon_kelsa_tiriladi(baza, monkeypatch, tmp_pat
         conn.rollback()
         ish2, _t = queue.ish_ol(conn)
         assert ish2["uuid"] == uid
+
+
+@haqiqiy
+def test_sherik_api_si_shablon_bersa(baza, monkeypatch, tmp_path):
+    """Buyurtmachi fayllari API si (2026-10-22), ilova roli bilan.
+
+    Ichki yo'l: API bergan shablon `templates` ga yoziladi — fayl status 4 olmaydi.
+    Fon qidiruvi: status 4 olgan faylning tenderi keyin so'raladi; API fayllarni
+    bersa shablon yoziladi va fayl tiriladi (status 0, izoh tozalanadi).
+    """
+    import httpx
+    import psycopg
+
+    from app import config, download as _w
+    from app.worker import buyurtmachi
+    admin_url, ilova_url = baza
+    fayl = tmp_path / "x.xlsx"
+    fayl.write_bytes(b"PK\x03\x04")
+    monkeypatch.setattr(pipeline, "download", lambda link, papka: str(fayl))
+    monkeypatch.setattr(_w, "download", lambda link, papka: (_ for _ in ()).throw(RuntimeError("tarmoq yo'q")))
+    monkeypatch.setattr(_w, "FILE_BASE_URL", "https://apisitender.mc.uz/storage/")
+    monkeypatch.setattr(_w, "RUXSAT_HOSTLAR", ("apisitender.mc.uz",))
+    monkeypatch.setattr(config, "buyurtmachi_api", lambda: config.BuyurtmachiApi(
+        url="https://api.example.uz/get-customer-files", login="l", parol="p",
+        timeout=5, interval=1800, kun=7))
+    sherikda = {}
+
+    def javob(req):
+        tid = int(str(req.url).rsplit("/", 1)[1])
+        return httpx.Response(200, json={"success": True, "data": sherikda.get(tid, [])})
+
+    def forma(tid, fid):
+        return [{"file_id": fid, "type": "excel1", "link": f"{tid}/excel1/56/{fid}.xlsx",
+                 "tender_id": tid}]
+
+    buyurtmachi._tozala()
+    buyurtmachi._Mijoz._c = httpx.Client(transport=httpx.MockTransport(javob))
+    try:
+        with psycopg.connect(admin_url, autocommit=True) as adm, \
+                psycopg.connect(ilova_url) as conn:
+            adm.execute("TRUNCATE files, jobs_state, yuborish_navbati, templates RESTART IDENTITY")
+            yoq = _fayl(adm, 296436)                  # sherikda ham yo'q → status 4
+            bor = _fayl(adm, 296449)                  # sherikda bor → status 4 EMAS
+            sherikda[296449] = forma(296449, 2970001)
+
+            for kutilgan in (yoq, bor):
+                conn.rollback()
+                ish, token = queue.ish_ol(conn)
+                assert ish["uuid"] == kutilgan
+                pipeline.ishni_bajar(conn, ish, token)
+
+            holat = "SELECT f.status, f.comment, s.dead_at IS NOT NULL FROM files f " \
+                    "JOIN jobs_state s ON s.uuid = f.id::text WHERE f.id = %s::bigint"
+            assert adm.execute(holat, (yoq,)).fetchone() == (4, verdict.IZOH_SHABLON_TOPILMADI, True)
+            # Shablon bor, faqat yuklab olinmadi (sinovda tarmoq yo'q) — texnik qayta urinish.
+            assert adm.execute(holat, (bor,)).fetchone() == (0, None, False)
+            assert adm.execute("SELECT tender_id, type, file_id, link FROM templates").fetchall() == [
+                (296449, "excel1", 2970001,
+                 "https://apisitender.mc.uz/storage/296449/excel1/56/2970001.xlsx")]
+
+            # Fon qidiruvi: sherik fayllarni keyin yukladi; interval o'tdi.
+            sherikda[296436] = forma(296436, 2967839)
+            assert buyurtmachi.supur(conn) == 0       # 296436 yaqinda so'ralgan
+            buyurtmachi._H.soroldi.clear()
+            buyurtmachi._H.supurildi = None
+            assert buyurtmachi.supur(conn) == 1
+            assert adm.execute(holat, (yoq,)).fetchone() == (0, None, False)
+            assert adm.execute("SELECT count(*) FROM templates WHERE tender_id = 296436"
+                               ).fetchone()[0] == 1
+            buyurtmachi._H.supurildi = None
+            assert buyurtmachi.supur(conn) == 0       # endi nomzod yo'q
+    finally:
+        buyurtmachi._tozala()

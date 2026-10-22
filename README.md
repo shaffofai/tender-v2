@@ -113,6 +113,21 @@ tiriladi (status 4 → 0, izoh tozalanadi) va haqiqiy verdikt ikkinchi xabar
 bo'lib ketadi. `ETALON_KUTISH_INTERVAL` / `ETALON_KUTISH_MAX_SOAT` endi
 ishlatilmaydi.
 
+**2026-10-22 dan — avval sherikdan so'raladi** (`app/worker/buyurtmachi.py`).
+Shablon yo'q bo'lsa worker status 4 dan OLDIN
+`GET .../ai/get-customer-files/<tender_id>` ni chaqiradi (Basic Auth —
+`TENDER_API_LOGIN`/`TENDER_API_PAROL`; manzil `TENDER_API_URL` dan kelib chiqadi,
+`BUYURTMACHI_API_URL` bilan almashtiriladi, `0` — o'chiq). Kelgan fayllar sherik
+POST qilganlar bilan bir yo'ldan `templates` ga yoziladi (host oq ro'yxati,
+`type`, `file_id` noyobligi) va fayl o'sha zahoti haqiqiy etalon bilan
+tekshiriladi. Status 4 faqat API ham bermasa (yoki xato bersa). Bo'sh siklda
+fon qidiruvi (60 s da bir marta, 10 tendergacha) so'nggi `BUYURTMACHI_API_KUN`
+(7) kundagi shablonsiz status 4 fayllarning tenderlarini qayta so'raydi —
+shablon tushsa fayllar tiriladi. Bitta tender `BUYURTMACHI_API_INTERVAL` (1800 s)
+da ko'pi bilan bir marta so'raladi. Jurnalda: `hodisa = shablon_olindi`
+(`qoshimcha`: tender_id, turlar); kalit rad etilsa (401/403) — `error` satri,
+audit bot Telegram'ga yuboradi.
+
 ## Baza
 
 Tender-v2 ning **o'z** PostgreSQL bazasi bor (compose: `db`), platformaning

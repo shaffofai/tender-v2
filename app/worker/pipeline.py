@@ -4,8 +4,9 @@
 Qadamlar TARTIBI tekshiruv mantig'ining o'zi (har qadam izohida sababi bor):
 
     1)  yuklab olish                                   `_yukla`
-    2)  etalon: `templates` dan; yo'q bo'lsa darhol status 4 (2026-10-19), noma'lum tur (F3)
-        yoki texnik holat                              `_etalonni_top`
+    2)  etalon: `templates` dan; yo'q bo'lsa sherik API sidan (2026-10-22), u ham
+        bermasa status 4 (2026-10-19); noma'lum tur (F3) yoki texnik holat
+                                                       `_etalonni_top`
     Q1) bayt-ba-bayt aynan nusxa → status 3           (hamma qoidadan OLDIN)
     3)  o'qish: ochilmadi → QABUL (#2); mazmun-nusxa (S1b) → 2;
         `validate_one`; bo'sh hujjat (#7) → 2
@@ -35,7 +36,7 @@ from app.worker.gates import (
     _mazmun_nusxa_res,
     _ochilmadi_res,
 )
-from app.worker import pauza
+from app.worker import buyurtmachi, pauza
 from app.worker.queue import (
     KUTISH_BELGI,
     SHABLON_YOQ_BELGI,
@@ -129,19 +130,8 @@ def _yuklovchi(ish):
     return None
 
 
-def _etalonni_top(conn, ish, token, yuklangan):
-    """2) Etalon — `templates` jadvalidan, tender_id + type bo'yicha.
-
-    Qaytadi: (rol, etalon_yoli, tfid, etalon_note), yoki None — fayl status 4
-    («buyurtmachi fayllari topilmadi») yoki texnik holatga o'tkazilgan
-    (chaqiruvchi to'xtaydi).
-
-    Diskdagi etalon/ papkasi (fayl nomidagi ID orqali) ENDI YO'Q: u fayl
-    nomi bo'yicha TASODIFIY mos kelib, butunlay boshqa tenderning shabloni
-    bilan solishtirib yolg'on verdikt berishi mumkin edi (va `tender_id`
-    bo'lgan qatorlar uchun allaqachon yopiq edi).
-    """
-    uid = ish["uuid"]
+def _etalon_qidir(conn, ish):
+    """`templates` dan etalon: (rol, etalon_yoli, tfid, etalon_note, shablon_yoq)."""
     rol = etalon_yoli = tfid = None
     shablon_yoq = False
     etalon_note = None            # F2: bir nechta shablon bo'lsa audit belgisi
@@ -159,6 +149,28 @@ def _etalonni_top(conn, ish, token, yuklangan):
         log(f"  [templates] {exc}", "warning")
     except templates_db.EtalonOqilmadi as exc:
         log(f"  [templates] {exc}", "warning")
+    return rol, etalon_yoli, tfid, etalon_note, shablon_yoq
+
+
+def _etalonni_top(conn, ish, token, yuklangan):
+    """2) Etalon — `templates` jadvalidan, tender_id + type bo'yicha.
+
+    Qaytadi: (rol, etalon_yoli, tfid, etalon_note), yoki None — fayl status 4
+    («buyurtmachi fayllari topilmadi») yoki texnik holatga o'tkazilgan
+    (chaqiruvchi to'xtaydi). Shablon yo'q bo'lsa avval sherikning buyurtmachi
+    fayllari API si so'raladi (`buyurtmachi.shablonlarni_ol`, 2026-10-22);
+    status 4 faqat u ham bermasa.
+
+    Diskdagi etalon/ papkasi (fayl nomidagi ID orqali) ENDI YO'Q: u fayl
+    nomi bo'yicha TASODIFIY mos kelib, butunlay boshqa tenderning shabloni
+    bilan solishtirib yolg'on verdikt berishi mumkin edi (va `tender_id`
+    bo'lgan qatorlar uchun allaqachon yopiq edi).
+    """
+    uid = ish["uuid"]
+    rol, etalon_yoli, tfid, etalon_note, shablon_yoq = _etalon_qidir(conn, ish)
+    if (shablon_yoq and str(ish.get("type") or "").strip().lower() in templates_db.TYPE_ROL
+            and buyurtmachi.shablonlarni_ol(conn, ish["tender_id"])):
+        rol, etalon_yoli, tfid, etalon_note, shablon_yoq = _etalon_qidir(conn, ish)
 
     if not etalon_yoli or rol is None:
         if shablon_yoq:
@@ -183,6 +195,8 @@ def _etalonni_top(conn, ish, token, yuklangan):
             # topilmadi.» va xabar kechikishsiz ketadi; jurnaldagi
             # `shablon_topilmadi` satrini audit bot Telegram'ga yuboradi.
             # Shablon keyin kelsa fayl tiriladi va haqiqiy verdikt ketadi (N1).
+            # 2026-10-22: bu yerga faqat sherik API si ham bermaganda keladi;
+            # fon qidiruvi (`buyurtmachi.supur`) tenderni keyin yana so'raydi.
             sabab = (f"«{templates_db.TEMPLATES_TABLE}» da tender_id="
                      f"{ish['tender_id']} type={ish.get('type')} uchun "
                      f"shablon yo'q")

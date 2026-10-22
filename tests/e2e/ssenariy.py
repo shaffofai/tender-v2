@@ -230,6 +230,10 @@ def base_env(**extra):
         "KIRUVCHI_LOGIN": LOGIN, "KIRUVCHI_PAROL": PAROL, "MAX_TOPLAM": "60",
         "TENDER_API_URL": f"http://127.0.0.1:{P_TENDER}/api/integration/ai/set-result",
         "TENDER_API_LOGIN": T_LOGIN, "TENDER_API_PAROL": T_PAROL,
+        # Buyurtmachi fayllari API si (2026-10-22) bu ssenariyda O'CHIQ: soxta
+        # tenderda u yo'q, yoqilsa har shablonsiz fayl unga so'rov yuborardi.
+        # Sinovi — tests/test_buyurtmachi_api.py, test_shablon_topilmadi.py.
+        "BUYURTMACHI_API_URL": "0",
         "TENDER_QABUL_STATUSLAR": "1,2,3,4", "TENDER_STATUS_XARITA": "",
         "YUBORISH_OQIM": "1", "YUBORISH_TEXNIK_KECHIKISH": "0",
         "YUBORISH_RETRY_BAZA": "0", "CRON_INTERVAL": "1",

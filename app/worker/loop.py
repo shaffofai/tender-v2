@@ -18,7 +18,7 @@ from app import templates as templates_db
 from app.db import DATABASE_URL, safe_dsn, schema
 from app.db.schema import JOBS_TABLE, SxemaXatosi
 from app.log import log
-from app.worker import pauza
+from app.worker import buyurtmachi, pauza
 from app.worker.pipeline import ishni_bajar
 from app.worker.queue import (
     ish_ol,
@@ -137,6 +137,8 @@ def _sessiya(conn, once):
             # F1/N1: shablon kelgan bo'lsa «shablon yo'q» fayllar qayta
             # tekshiruvga qaytsin (API ham shablon kelganda shuni chaqiradi).
             shablon_kelganini_tekshir(conn)
+            # 2026-10-22: ularning buyurtmachi fayllari sherik API sidan.
+            buyurtmachi.supur(conn)
             time.sleep(POLL_INTERVAL)
             continue
         bosh_tick = 0
